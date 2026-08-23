@@ -2,6 +2,14 @@ import {Deck, WebMercatorViewport} from '@deck.gl/core';
 import type {MapViewState} from '@deck.gl/core';
 import {GeoJsonLayer} from '@deck.gl/layers';
 import {getCountyBounds} from './geoBounds';
+import type {
+  CountyDemographics,
+  CountyDemographicsDataset,
+} from '../data/loadDemographics';
+import type {
+  CountyCrime,
+  CountyCrimeDataset,
+} from '../data/loadCrime';
 import type {CountyFeature, CountyMetric, CountyProperties} from './types';
 
 export class CountyDetailOverlay {
@@ -9,16 +17,24 @@ export class CountyDetailOverlay {
   private readonly mapElement: HTMLDivElement;
   private readonly closeButton: HTMLButtonElement;
   private readonly title: HTMLHeadingElement;
-  private readonly landArea: HTMLElement;
+  private readonly metricLabel: HTMLElement;
+  private readonly metricValue: HTMLElement;
   private readonly waterArea: HTMLElement;
   private readonly geoid: HTMLElement;
   private readonly state: HTMLElement;
+  private readonly demographicsPanel: HTMLElement;
+  private readonly demographicsContent: HTMLElement;
+  private readonly demographicsToggle: HTMLButtonElement;
+  private readonly demographicsEyebrow: HTMLElement;
+  private readonly demographicsTitle: HTMLHeadingElement;
+  private readonly demographicsSource: HTMLAnchorElement;
   private readonly resizeObserver: ResizeObserver;
   private readonly handleKeyDown = (event: KeyboardEvent) => {
     if (this.isOpen && event.key === 'Escape') this.onRequestClose();
   };
   private deck: Deck | null = null;
   private county: CountyFeature;
+  private metric: CountyMetric;
   private isOpen = false;
   private updateFrame = 0;
   private revealAfterRender = false;
@@ -32,10 +48,13 @@ export class CountyDetailOverlay {
   constructor(
     container: HTMLElement,
     initialCounty: CountyFeature,
-    private readonly metric: CountyMetric,
+    metric: CountyMetric,
+    private readonly demographics: CountyDemographicsDataset,
+    private readonly crime: CountyCrimeDataset,
     private readonly onRequestClose: () => void,
   ) {
     this.county = initialCounty;
+    this.metric = metric;
     this.element = document.createElement('div');
     this.element.className = 'county-detail-scrim';
     this.element.setAttribute('aria-hidden', 'true');
@@ -50,11 +69,25 @@ export class CountyDetailOverlay {
             <span aria-hidden="true">×</span>
           </button>
         </header>
-        <div class="county-detail__map">
+        <div class="county-detail__map county-detail__map--demographics-open">
+          <button class="county-detail__demographics-toggle" type="button" aria-expanded="true">
+            Demographics
+          </button>
+          <aside class="county-detail__demographics" aria-label="County demographics">
+            <header>
+              <div>
+                <span class="eyebrow">2024 demographics</span>
+                <h3>Population profile</h3>
+              </div>
+              <button class="county-detail__demographics-close" type="button" aria-label="Hide detail profile">×</button>
+            </header>
+            <div class="county-detail__demographics-content"></div>
+            <a class="county-detail__demographics-source" target="_blank" rel="noreferrer"></a>
+          </aside>
           <div class="county-detail__map-note">Drag to pan · scroll to zoom</div>
         </div>
         <dl class="county-detail__stats">
-          <div><dt class="county-detail__metric-label"></dt><dd data-detail="land"></dd></div>
+          <div><dt class="county-detail__metric-label"></dt><dd data-detail="metric"></dd></div>
           <div><dt>Water area</dt><dd data-detail="water"></dd></div>
           <div><dt>FIPS / GEOID</dt><dd data-detail="geoid"></dd></div>
           <div><dt>State</dt><dd data-detail="state"></dd></div>
@@ -69,18 +102,65 @@ export class CountyDetailOverlay {
       HTMLButtonElement,
     );
     this.title = query(this.element, '#county-detail-title', HTMLHeadingElement);
-    this.landArea = query(this.element, '[data-detail="land"]', HTMLElement);
-    this.waterArea = query(this.element, '[data-detail="water"]', HTMLElement);
-    this.geoid = query(this.element, '[data-detail="geoid"]', HTMLElement);
-    this.state = query(this.element, '[data-detail="state"]', HTMLElement);
-    query(
+    this.metricLabel = query(
       this.element,
       '.county-detail__metric-label',
       HTMLElement,
-    ).textContent = metric.label;
+    );
+    this.metricValue = query(
+      this.element,
+      '[data-detail="metric"]',
+      HTMLElement,
+    );
+    this.waterArea = query(this.element, '[data-detail="water"]', HTMLElement);
+    this.geoid = query(this.element, '[data-detail="geoid"]', HTMLElement);
+    this.state = query(this.element, '[data-detail="state"]', HTMLElement);
+    this.demographicsPanel = query(
+      this.element,
+      '.county-detail__demographics',
+      HTMLElement,
+    );
+    this.demographicsContent = query(
+      this.element,
+      '.county-detail__demographics-content',
+      HTMLElement,
+    );
+    this.demographicsToggle = query(
+      this.element,
+      '.county-detail__demographics-toggle',
+      HTMLButtonElement,
+    );
+    const demographicsClose = query(
+      this.element,
+      '.county-detail__demographics-close',
+      HTMLButtonElement,
+    );
+    this.demographicsEyebrow = query(
+      this.element,
+      '.county-detail__demographics .eyebrow',
+      HTMLElement,
+    );
+    this.demographicsTitle = query(
+      this.element,
+      '.county-detail__demographics h3',
+      HTMLHeadingElement,
+    );
+    this.demographicsSource = query(
+      this.element,
+      '.county-detail__demographics-source',
+      HTMLAnchorElement,
+    );
+    this.metricLabel.textContent = metric.label;
+    this.updateProfileLabels();
     this.updateText();
 
     this.closeButton.addEventListener('click', onRequestClose);
+    this.demographicsToggle.addEventListener('click', () =>
+      this.setDemographicsOpen(true),
+    );
+    demographicsClose.addEventListener('click', () =>
+      this.setDemographicsOpen(false),
+    );
     this.element.addEventListener('click', (event) => {
       if (event.target === this.element) onRequestClose();
     });
@@ -96,6 +176,7 @@ export class CountyDetailOverlay {
     this.revealAfterRender = false;
     this.county = county;
     this.isOpen = true;
+    this.setDemographicsOpen(true);
     this.updateText();
     this.element.setAttribute('role', 'dialog');
     this.element.setAttribute('aria-modal', 'true');
@@ -123,6 +204,13 @@ export class CountyDetailOverlay {
     this.element.setAttribute('aria-hidden', 'true');
     this.closeButton.tabIndex = -1;
     this.deck?.setProps({controller: false});
+  }
+
+  setMetric(metric: CountyMetric) {
+    this.metric = metric;
+    this.metricLabel.textContent = metric.label;
+    this.updateProfileLabels();
+    this.updateText();
   }
 
   destroy() {
@@ -204,12 +292,191 @@ export class CountyDetailOverlay {
       'aria-label',
       `Enlarged boundary of ${properties.NAMELSAD}`,
     );
-    this.landArea.textContent =
+    this.metricValue.textContent =
       metricValue == null ? 'No data' : this.metric.formatValue(metricValue);
     this.waterArea.textContent = formatSquareMiles(properties.AWATER);
     this.geoid.textContent = properties.GEOID;
     this.state.textContent = properties.STATE_NAME;
+    this.renderProfile();
   }
+
+  private setDemographicsOpen(isOpen: boolean) {
+    this.mapElement.classList.toggle(
+      'county-detail__map--demographics-open',
+      isOpen,
+    );
+    this.demographicsPanel.setAttribute('aria-hidden', String(!isOpen));
+    this.demographicsToggle.setAttribute('aria-expanded', String(isOpen));
+  }
+
+  private updateProfileLabels() {
+    const isCrime = this.metric.id === this.crime.id;
+    this.demographicsToggle.textContent = isCrime ? 'Crime profile' : 'Demographics';
+    this.demographicsPanel.setAttribute(
+      'aria-label',
+      isCrime ? 'County crime profile' : 'County demographics',
+    );
+    this.demographicsEyebrow.textContent = isCrime
+      ? `${this.crime.vintage} NIBRS`
+      : `${this.demographics.vintage} demographics`;
+    this.demographicsTitle.textContent = isCrime
+      ? 'Known offender profile'
+      : 'Population profile';
+    const source = isCrime ? this.crime.source : this.demographics.source;
+    this.demographicsSource.textContent = source.label;
+    this.demographicsSource.href = source.url;
+  }
+
+  private renderProfile() {
+    if (this.metric.id === this.crime.id) {
+      this.renderCrimeProfile();
+      return;
+    }
+    const demographics = this.demographics.counties.get(
+      this.county.properties.GEOID,
+    );
+    if (!demographics) {
+      const message = document.createElement('p');
+      message.className = 'county-detail__demographics-empty';
+      message.textContent = 'No demographic estimate is available.';
+      this.demographicsContent.replaceChildren(message);
+      return;
+    }
+    this.demographicsContent.replaceChildren(
+      createDemographicGroup('Sex', demographics.total, [
+        ['Female', demographics.female],
+        ['Male', demographics.male],
+      ]),
+      createDemographicGroup(
+        'Race & ethnicity',
+        demographics.total,
+        demographicGroups(demographics),
+      ),
+    );
+  }
+
+  private renderCrimeProfile() {
+    const crime = this.crime.counties.get(this.county.properties.GEOID);
+    if (!crime) {
+      const message = document.createElement('p');
+      message.className = 'county-detail__demographics-empty';
+      message.textContent =
+        'No 2025 NIBRS reports were attributed to this county.';
+      this.demographicsContent.replaceChildren(message);
+      return;
+    }
+    const caveat = document.createElement('p');
+    caveat.className = 'county-detail__profile-caveat';
+    caveat.textContent = this.crime.caveat;
+    this.demographicsContent.replaceChildren(
+      createCrimeSummary(crime),
+      createDemographicGroup('Known offender sex', crime.offenders.total, [
+        ['Male', crime.offenders.male],
+        ['Female', crime.offenders.female],
+        ['Unknown / not specified', crime.offenders.sexUnknown],
+      ]),
+      createDemographicGroup('Known offender ethnicity', crime.offenders.total, [
+        ['Hispanic / Latino', crime.offenders.hispanic],
+        ['Not Hispanic / Latino', crime.offenders.notHispanic],
+        ['Multiple', crime.offenders.ethnicityMultiple],
+        ['Unknown / not specified', crime.offenders.ethnicityUnknown],
+      ]),
+      createDemographicGroup(
+        'Known offender race',
+        crime.offenders.total,
+        crimeRaceGroups(crime),
+      ),
+      caveat,
+    );
+  }
+}
+
+function createCrimeSummary(crime: CountyCrime) {
+  const section = document.createElement('section');
+  const heading = document.createElement('h4');
+  heading.textContent = 'Reported activity';
+  const list = document.createElement('dl');
+  list.className = 'county-detail__crime-summary';
+  for (const [label, value] of [
+    ['Group A offenses', crime.offenses],
+    ['Incidents', crime.incidents],
+    ['Known offender records', crime.offenders.total],
+  ] as Array<[string, number]>) {
+    const row = document.createElement('div');
+    const term = document.createElement('dt');
+    const detail = document.createElement('dd');
+    term.textContent = label;
+    detail.textContent = formatCount(value);
+    row.append(term, detail);
+    list.append(row);
+  }
+  section.append(heading, list);
+  return section;
+}
+
+function crimeRaceGroups(crime: CountyCrime): Array<[string, number]> {
+  return [
+    ['White', crime.offenders.white],
+    ['Black / African American', crime.offenders.black],
+    ['American Indian / Alaska Native', crime.offenders.native],
+    ['Asian', crime.offenders.asian],
+    ['Native Hawaiian / Pacific Islander', crime.offenders.pacificIslander],
+    ['Multiple races', crime.offenders.multiracial],
+    ['Unknown / not specified', crime.offenders.raceUnknown],
+  ];
+}
+
+function demographicGroups(
+  demographics: CountyDemographics,
+): Array<[string, number]> {
+  return [
+    ['Hispanic / Latino', demographics.hispanic],
+    ['White, non-Hispanic', demographics.whiteNonHispanic],
+    ['Black, non-Hispanic', demographics.blackNonHispanic],
+    ['Asian, non-Hispanic', demographics.asianNonHispanic],
+    ['American Indian / Alaska Native', demographics.nativeNonHispanic],
+    ['Native Hawaiian / Pacific Islander', demographics.pacificIslanderNonHispanic],
+    ['Two or more races, non-Hispanic', demographics.multiracialNonHispanic],
+  ];
+}
+
+function createDemographicGroup(
+  title: string,
+  total: number,
+  entries: Array<[string, number]>,
+) {
+  const section = document.createElement('section');
+  const heading = document.createElement('h4');
+  heading.textContent = title;
+  section.append(heading);
+  for (const [label, value] of entries) {
+    const percentage = total ? (value / total) * 100 : 0;
+    const row = document.createElement('div');
+    row.className = 'demographic-row';
+    const text = document.createElement('div');
+    const name = document.createElement('span');
+    name.textContent = label;
+    const amount = document.createElement('strong');
+    amount.textContent = `${formatCount(value)} · ${formatPercentage(percentage)}`;
+    text.append(name, amount);
+    const track = document.createElement('div');
+    track.className = 'demographic-row__track';
+    const bar = document.createElement('span');
+    bar.style.width = `${percentage}%`;
+    track.append(bar);
+    row.append(text, track);
+    section.append(row);
+  }
+  return section;
+}
+
+function formatCount(value: number) {
+  return new Intl.NumberFormat('en-US').format(value);
+}
+
+function formatPercentage(value: number) {
+  if (value > 0 && value < 0.1) return '<0.1%';
+  return `${value.toFixed(1)}%`;
 }
 
 function measurePopupLatency() {

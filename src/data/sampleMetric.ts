@@ -9,6 +9,11 @@ export function createLandAreaMetric(
     id: 'land-area',
     label: 'Land area',
     description: 'Census 2023 cartographic boundary land-area attribute',
+    vintage: '2023',
+    source: {
+      label: 'U.S. Census Bureau Cartographic Boundary Files',
+      url: 'https://www.census.gov/geographies/mapping-files/time-series/geo/cartographic-boundary.2023.html',
+    },
     values: new Map(
       counties.features.map((feature) => [
         feature.properties.GEOID,

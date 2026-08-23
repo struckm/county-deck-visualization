@@ -1,17 +1,34 @@
 import {createLandAreaMetric} from './data/sampleMetric';
 import {loadCounties} from './data/loadCounties';
+import {loadCountyMetric} from './data/loadMetric';
+import {loadCountyDemographics} from './data/loadDemographics';
+import {createCrimeMetric, loadCountyCrime} from './data/loadCrime';
+import {createEthnicityOverlay} from './data/ethnicityOverlay';
+import {createCrimeRaceOverlay} from './data/crimeRaceOverlay';
 import {CountyChoropleth} from './map/CountyChoropleth';
 import {CountyDetailOverlay} from './map/CountyDetailOverlay';
-import type {CountyFeature, CountyMetric} from './map/types';
+import type {
+  CountyCategoryOverlay,
+  CountyFeature,
+  CountyMetric,
+} from './map/types';
 
 export class CountyMapApp {
   private readonly abortController = new AbortController();
   private readonly mapCard: HTMLElement;
   private readonly status: HTMLDivElement;
   private readonly footer: HTMLElement;
+  private readonly heading: HTMLHeadingElement;
+  private readonly description: HTMLParagraphElement;
+  private readonly metricSelect: HTMLSelectElement;
+  private readonly sourceNote: HTMLAnchorElement;
   private choropleth: CountyChoropleth | null = null;
   private detailOverlay: CountyDetailOverlay | null = null;
+  private mapElement: HTMLDivElement | null = null;
   private metric: CountyMetric | null = null;
+  private metrics: CountyMetric[] = [];
+  private categoryOverlays: CountyCategoryOverlay[] = [];
+  private selectedCounty: CountyFeature | null = null;
 
   constructor(private readonly root: HTMLDivElement) {
     root.innerHTML = `
@@ -19,10 +36,18 @@ export class CountyMapApp {
         <header class="app-header">
           <div>
             <div class="eyebrow">County atlas / Census 2023</div>
-            <h1>Land area across U.S. counties</h1>
-            <p>A reusable Deck.gl choropleth keyed by five-digit county GEOID.</p>
+            <h1>Population across U.S. counties</h1>
+            <p class="metric-description">Estimated resident population on July 1, 2024</p>
           </div>
-          <div class="source-note">Census cartographic boundary, 1:5m</div>
+          <div class="metric-control">
+            <div class="metric-control__field">
+              <label for="metric-select">Metric</label>
+              <select id="metric-select" disabled>
+                <option>Loading metrics…</option>
+              </select>
+            </div>
+            <a class="source-note" target="_blank" rel="noreferrer"></a>
+          </div>
         </header>
         <section class="map-card">
           <div class="map-status" role="status">
@@ -34,31 +59,83 @@ export class CountyMapApp {
     this.mapCard = required(root, '.map-card', HTMLElement);
     this.status = required(root, '.map-status', HTMLDivElement);
     this.footer = required(root, '.detail-bar', HTMLElement);
+    this.heading = required(root, 'h1', HTMLHeadingElement);
+    this.description = required(
+      root,
+      '.metric-description',
+      HTMLParagraphElement,
+    );
+    this.metricSelect = required(
+      root,
+      '#metric-select',
+      HTMLSelectElement,
+    );
+    this.sourceNote = required(
+      root,
+      '.source-note',
+      HTMLAnchorElement,
+    );
+    this.metricSelect.addEventListener('change', () => {
+      const overlay = this.categoryOverlays.find(
+        (candidate) => candidate.id === this.metricSelect.value,
+      );
+      if (overlay) {
+        this.applyCategoryOverlay(overlay);
+        return;
+      }
+      const metric = this.metrics.find(
+        (candidate) => candidate.id === this.metricSelect.value,
+      );
+      if (metric) this.applyMetric(metric);
+    });
     this.renderFooter(null);
   }
 
   async start() {
     try {
-      const counties = await loadCounties(this.abortController.signal);
+      const [counties, population, demographics, crime] = await Promise.all([
+        loadCounties(this.abortController.signal),
+        loadCountyMetric(
+          '/data/county-population-2024.json',
+          (value) => new Intl.NumberFormat('en-US').format(value),
+          this.abortController.signal,
+        ),
+        loadCountyDemographics(this.abortController.signal),
+        loadCountyCrime(this.abortController.signal),
+      ]);
       if (this.abortController.signal.aborted) return;
-      this.metric = createLandAreaMetric(counties);
+      this.metrics = [
+        population,
+        createCrimeMetric(crime),
+        createLandAreaMetric(counties),
+      ];
+      this.categoryOverlays = [
+        createEthnicityOverlay(demographics),
+        createCrimeRaceOverlay(crime),
+      ];
+      this.populateMetricSelect();
+      const initialMetric = this.metrics[0];
+      this.applyMetric(initialMetric);
 
       const map = document.createElement('div');
       map.className = 'map map--loading';
-      map.setAttribute('aria-label', `${this.metric.label} by U.S. county`);
+      map.setAttribute('aria-label', `${initialMetric.label} by U.S. county`);
       this.mapCard.append(map);
+      this.mapElement = map;
 
       this.choropleth = new CountyChoropleth(
         map,
         counties,
-        this.metric,
+        initialMetric,
         (county) => this.selectCounty(county),
         () => this.status.remove(),
       );
       this.detailOverlay = new CountyDetailOverlay(
         this.mapCard,
         counties.features[0],
-        this.metric,
+        initialMetric,
+        demographics,
+        crime,
         () => this.clearSelection(),
       );
     } catch (error) {
@@ -67,7 +144,7 @@ export class CountyMapApp {
       this.status.setAttribute('role', 'alert');
       this.status.replaceChildren(
         document.createTextNode(
-          `Could not load county boundaries: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          `Could not load map data: ${error instanceof Error ? error.message : 'Unknown error'}`,
         ),
       );
     }
@@ -80,12 +157,14 @@ export class CountyMapApp {
   }
 
   private selectCounty(county: CountyFeature) {
+    this.selectedCounty = county;
     this.detailOverlay?.open(county);
     this.renderFooter(county);
     this.choropleth?.setSelection(county.properties.GEOID);
   }
 
   private clearSelection() {
+    this.selectedCounty = null;
     this.choropleth?.setSelection(null);
     this.detailOverlay?.hide();
     this.renderFooter(null);
@@ -115,6 +194,71 @@ export class CountyMapApp {
       clear,
     );
   }
+
+  private populateMetricSelect() {
+    this.metricSelect.replaceChildren(
+      ...this.metrics.map((metric) => {
+        const option = document.createElement('option');
+        option.value = metric.id;
+        option.textContent = metric.vintage
+          ? `${metric.label} (${metric.vintage})`
+          : metric.label;
+        return option;
+      }),
+      ...this.categoryOverlays.map((overlay) =>
+        createOption(
+          overlay.id,
+          overlay.vintage
+            ? `${overlay.label} (${overlay.vintage})`
+            : overlay.label,
+        ),
+      ),
+    );
+    this.metricSelect.disabled = false;
+  }
+
+  private applyMetric(metric: CountyMetric) {
+    this.metric = metric;
+    this.metricSelect.value = metric.id;
+    this.choropleth?.setCategoryOverlay(null);
+    this.choropleth?.setMetric(metric);
+    this.detailOverlay?.setMetric(metric);
+    this.renderFooter(this.selectedCounty);
+    this.heading.textContent = `${metric.label} across U.S. counties`;
+    this.description.textContent =
+      metric.description ?? 'County-level data keyed by five-digit Census GEOID.';
+    this.sourceNote.textContent = metric.source?.label ?? '';
+    this.sourceNote.href = metric.source?.url ?? '#';
+    this.sourceNote.hidden = !metric.source;
+    this.mapElement?.setAttribute(
+      'aria-label',
+      `${metric.label} by U.S. county`,
+    );
+  }
+
+  private applyCategoryOverlay(overlay: CountyCategoryOverlay) {
+    const detailMetric = this.metrics.find(({id}) => id === overlay.metricId);
+    if (!detailMetric) return;
+    this.metric = detailMetric;
+    this.metricSelect.value = overlay.id;
+    this.choropleth?.setMetric(detailMetric);
+    this.choropleth?.setCategoryOverlay(overlay);
+    this.detailOverlay?.setMetric(detailMetric);
+    this.renderFooter(this.selectedCounty);
+    this.heading.textContent = `${overlay.label} by county`;
+    this.description.textContent = overlay.description;
+    this.sourceNote.textContent = overlay.source?.label ?? '';
+    this.sourceNote.href = overlay.source?.url ?? '#';
+    this.sourceNote.hidden = !overlay.source;
+    this.mapElement?.setAttribute('aria-label', `${overlay.label} by county`);
+  }
+}
+
+function createOption(value: string, label: string) {
+  const option = document.createElement('option');
+  option.value = value;
+  option.textContent = label;
+  return option;
 }
 
 function createDetail(label: string, value: string) {

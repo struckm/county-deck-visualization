@@ -1,9 +1,15 @@
 import {Deck} from '@deck.gl/core';
 import type {MapViewState, PickingInfo} from '@deck.gl/core';
 import {GeoJsonLayer} from '@deck.gl/layers';
-import {createQuantileScale, DEFAULT_PALETTE} from './colorScale';
+import {
+  createLogScale,
+  createQuantileScale,
+  DEFAULT_PALETTE,
+  NO_DATA_COLOR,
+} from './colorScale';
 import type {
   Color,
+  CountyCategoryOverlay,
   CountyFeature,
   CountyFeatureCollection,
   CountyMetric,
@@ -23,9 +29,11 @@ const US_VIEW_STATE: MapViewState = {
 export class CountyChoropleth {
   readonly deck: Deck;
   private readonly countiesByGeoid: Map<string, CountyFeature>;
-  private readonly mainLayer: GeoJsonLayer<CountyProperties>;
   private readonly resizeObserver: ResizeObserver;
+  private mainLayer: GeoJsonLayer<CountyProperties>;
   private selectionLayer: GeoJsonLayer<CountyProperties>;
+  private legend: HTMLDivElement;
+  private categoryOverlay: CountyCategoryOverlay | null = null;
   private hoveredCounty: CountyFeature | null = null;
   private pointerStart: {
     x: number;
@@ -92,39 +100,16 @@ export class CountyChoropleth {
 
   constructor(
     private readonly container: HTMLDivElement,
-    counties: CountyFeatureCollection,
-    private readonly metric: CountyMetric,
+    private readonly counties: CountyFeatureCollection,
+    private metric: CountyMetric,
     private readonly onSelect: (county: CountyFeature) => void,
     private readonly onReady: () => void = () => {},
   ) {
-    const scale = createQuantileScale([...metric.values.values()]);
+    const scale = createScale(metric);
     this.countiesByGeoid = new Map(
       counties.features.map((county) => [county.properties.GEOID, county]),
     );
-    this.mainLayer = new GeoJsonLayer<CountyProperties>({
-      id: `counties-${metric.id}`,
-      data: counties,
-      filled: true,
-      stroked: true,
-      pickable: true,
-      autoHighlight: true,
-      highlightColor: [255, 255, 255, 80],
-      getFillColor: (feature) =>
-        scale.colorFor(metric.values.get(feature.properties.GEOID)),
-      getLineColor: [255, 255, 255, 115],
-      getLineWidth: 0.7,
-      lineWidthUnits: 'pixels',
-      lineWidthMinPixels: 0.35,
-      onClick: ({object}: PickingInfo<CountyFeature>) => {
-        if (
-          object &&
-          performance.now() - this.lastImmediateSelection > 150
-        ) {
-          markPopupInput();
-          this.onSelect(object);
-        }
-      },
-    });
+    this.mainLayer = this.createMainLayer(scale);
     this.selectionLayer = this.createSelectionLayer();
 
     this.deck = new Deck({
@@ -140,15 +125,15 @@ export class CountyChoropleth {
       },
       getTooltip: ({object}: PickingInfo<CountyFeature>) => {
         if (!object) return null;
-        const value = metric.values.get(object.properties.GEOID);
         return {
-          text: `${object.properties.NAMELSAD}, ${object.properties.STUSPS}\n${metric.label}: ${value == null ? 'No data' : metric.formatValue(value)}`,
+          text: this.getTooltipText(object),
           className: 'county-tooltip',
         };
       },
     });
 
-    this.container.append(createLegend(metric, scale));
+    this.legend = createLegend(metric, scale);
+    this.container.append(this.legend);
     this.resizeObserver = new ResizeObserver(([entry]) => {
       this.deck.setProps({
         initialViewState: responsiveViewState(entry.contentRect.width),
@@ -165,6 +150,16 @@ export class CountyChoropleth {
       geoid ? this.countiesByGeoid.get(geoid) : undefined,
     );
     this.deck.setProps({layers: [this.mainLayer, this.selectionLayer]});
+  }
+
+  setMetric(metric: CountyMetric) {
+    this.metric = metric;
+    this.refreshVisualization();
+  }
+
+  setCategoryOverlay(overlay: CountyCategoryOverlay | null) {
+    this.categoryOverlay = overlay;
+    this.refreshVisualization();
   }
 
   destroy() {
@@ -188,12 +183,87 @@ export class CountyChoropleth {
       lineWidthUnits: 'pixels',
     });
   }
+
+  private createMainLayer(
+    scale: ReturnType<typeof createQuantileScale>,
+  ) {
+    const overlay = this.categoryOverlay;
+    const categoryColors = new Map(
+      overlay?.categories.map(({id, color}) => [id, color]),
+    );
+    return new GeoJsonLayer<CountyProperties>({
+      id: `counties-${overlay?.id ?? this.metric.id}`,
+      data: this.counties,
+      filled: true,
+      stroked: true,
+      pickable: true,
+      autoHighlight: true,
+      highlightColor: [255, 255, 255, 80],
+      getFillColor: (feature) => {
+        if (!overlay) {
+          return scale.colorFor(
+            this.metric.values.get(feature.properties.GEOID),
+          );
+        }
+        const category = overlay.values.get(feature.properties.GEOID);
+        if (category === undefined) return NO_DATA_COLOR;
+        return categoryColors.get(category) ?? NO_DATA_COLOR;
+      },
+      getLineColor: [255, 255, 255, 115],
+      getLineWidth: 0.7,
+      lineWidthUnits: 'pixels',
+      lineWidthMinPixels: 0.35,
+      onClick: ({object}: PickingInfo<CountyFeature>) => {
+        if (
+          object &&
+          performance.now() - this.lastImmediateSelection > 150
+        ) {
+          markPopupInput();
+          this.onSelect(object);
+        }
+      },
+    });
+  }
+
+  private refreshVisualization() {
+    const scale = createScale(this.metric);
+    this.mainLayer = this.createMainLayer(scale);
+    const legend = this.categoryOverlay
+      ? createCategoryLegend(this.categoryOverlay)
+      : createLegend(this.metric, scale);
+    this.legend.replaceWith(legend);
+    this.legend = legend;
+    this.deck.setProps({layers: [this.mainLayer, this.selectionLayer]});
+  }
+
+  private getTooltipText(county: CountyFeature) {
+    const countyName = `${county.properties.NAMELSAD}, ${county.properties.STUSPS}`;
+    const overlay = this.categoryOverlay;
+    if (!overlay) {
+      const value = this.metric.values.get(county.properties.GEOID);
+      return `${countyName}\n${this.metric.label}: ${value == null ? 'No data' : this.metric.formatValue(value)}`;
+    }
+    const category = overlay.values.get(county.properties.GEOID);
+    const label =
+      category === undefined
+        ? 'No data'
+        : overlay.categories.find(({id}) => id === category)?.label ??
+          'No data';
+    return `${countyName}\nLargest group: ${label}`;
+  }
 }
 
 function markPopupInput() {
   if (!import.meta.env.DEV) return;
   performance.clearMarks('county-popup-input');
   performance.mark('county-popup-input');
+}
+
+function createScale(metric: CountyMetric) {
+  const values = [...metric.values.values()];
+  return metric.scale === 'log'
+    ? createLogScale(values)
+    : createQuantileScale(values);
 }
 
 function responsiveViewState(containerWidth: number): MapViewState {
@@ -237,6 +307,47 @@ function createLegend(
   range.append(minimum, maximum);
   legend.append(label, swatches, range);
   return legend;
+}
+
+function createCategoryLegend(overlay: CountyCategoryOverlay) {
+  const legend = document.createElement('div');
+  legend.className = 'map-legend map-legend--categories';
+  legend.setAttribute('aria-label', `${overlay.label} legend`);
+  const label = document.createElement('div');
+  label.className = 'map-legend__label';
+  label.textContent = overlay.label;
+  const categories = document.createElement('div');
+  categories.className = 'map-legend__categories';
+  for (const category of overlay.categories) {
+    categories.append(
+      createCategoryLegendRow(
+        category.color,
+        category.label,
+        category.countyCount,
+      ),
+    );
+  }
+  legend.append(label, categories);
+  return legend;
+}
+
+function createCategoryLegendRow(
+  color: Color,
+  label: string,
+  count?: number,
+) {
+  const row = document.createElement('div');
+  const swatch = document.createElement('span');
+  swatch.style.background = toCssColor(color);
+  const text = document.createElement('span');
+  text.textContent = label;
+  row.append(swatch, text);
+  if (count != null) {
+    const total = document.createElement('strong');
+    total.textContent = new Intl.NumberFormat('en-US').format(count);
+    row.append(total);
+  }
+  return row;
 }
 
 function toCssColor([red, green, blue, alpha]: Color) {

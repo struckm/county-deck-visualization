@@ -22,6 +22,37 @@ export type CountyMetric = {
   id: string;
   label: string;
   description?: string;
+  vintage?: string;
+  source?: {
+    label: string;
+    url: string;
+  };
+  scale?: 'quantile' | 'log';
   values: ReadonlyMap<string, number | null>;
   formatValue: (value: number) => string;
+};
+
+export type CountyMetricFile = Omit<CountyMetric, 'values' | 'formatValue'> & {
+  values: Record<string, number | null>;
+};
+
+export type CountyCategory = {
+  id: string;
+  label: string;
+  color: Color;
+  countyCount: number;
+};
+
+export type CountyCategoryOverlay = {
+  id: string;
+  metricId: string;
+  label: string;
+  description: string;
+  vintage?: string;
+  source?: {
+    label: string;
+    url: string;
+  };
+  categories: readonly CountyCategory[];
+  values: ReadonlyMap<string, string>;
 };

@@ -1,7 +1,9 @@
 # U.S. county Deck.gl foundation
 
 A small, reusable TypeScript + Deck.gl county choropleth using the 2023 Census
-1:5,000,000 cartographic boundary file. The example metric is county land area.
+1:5,000,000 cartographic boundary file. The metric selector currently includes
+county population, FBI-reported offenses, land area, and a categorical
+race/ethnicity view.
 The application uses direct DOM updates and persistent `Deck` instances; it has
 no UI framework or component runtime.
 
@@ -17,7 +19,7 @@ npm install
 npm run dev
 ```
 
-## Reuse with another metric
+## County metric contract
 
 `CountyChoropleth` receives geometry and metric data separately. Create a
 `CountyMetric` whose `values` map is keyed by the Census five-digit county
@@ -42,9 +44,10 @@ const map = new CountyChoropleth(
 );
 ```
 
-The long-lived choropleth object owns rendering, hover, selection highlighting,
-and the legend; the application owns loading, metric construction, and
-selected-county state through direct method calls.
+Call `setMetric(metric)` to update the persistent national and detail Deck
+instances without remounting the map. The long-lived choropleth object owns
+rendering, hover, selection highlighting, and the legend; the application owns
+loading, metric construction, the selector, and selected-county state.
 `CountyDetailOverlay` is a separate detail surface, so county-specific layers
 such as Census tracts or local facilities can be added without coupling them to
 the national layer. Its Deck.gl renderer is measured and warmed while hidden,
@@ -55,3 +58,72 @@ then reused across selections so the blurred detail surface opens promptly.
 `public/data/us-counties-2023.geojson` is derived from the included Census
 shapefile and retains only the fields used by the visualization. The source
 uses NAD83; the browser-ready file is explicitly written as EPSG:4326.
+
+`public/data/county-population-2024.json` contains 3,144 county and
+county-equivalent estimates from the Census Population Estimates Program. All
+3,144 records join to the boundary file. The source does not provide matching
+records for American Samoa, Guam, the Northern Mariana Islands, Puerto Rico, or
+the U.S. Virgin Islands, so those areas intentionally display as no data.
+
+`public/data/county-demographics-2024.json` adds matching July 1, 2024 sex,
+race, and Hispanic-origin estimates to the county detail overlay. Its
+race/ethnicity bars are mutually exclusive: Hispanic/Latino of any race plus
+six non-Hispanic race groups. This ensures the categories sum to the displayed
+county population rather than double-counting people.
+
+The main Metric selector includes a categorical “Largest race & ethnicity
+group” view. It colors every covered county by its largest mutually exclusive
+group, even when that group is below 50% of residents. Groups that do not lead
+in any county are omitted from the legend.
+
+`public/data/county-crime-2025.json` aggregates 2025 FBI National
+Incident-Based Reporting System (NIBRS) Group A offenses to Census county
+GEOIDs. It covers 2,982 counties and county equivalents. Selecting “Reported
+offenses” colors counties by offense count and changes the county detail card
+to show reported incidents plus known-offender sex, ethnicity, and race.
+Unknown and not-specified demographic values remain visible.
+
+NIBRS is a voluntary law-enforcement reporting system, so these values are not
+counts of every crime committed. Reports are attributed to the county
+containing the FBI-published agency location; multi-county agencies therefore
+have approximate county attribution. Counties without attributed 2025 reports
+display as no data, not zero.
+
+The “Largest known-offender race” metric colors each covered county by the
+largest reported known-offender race category, even when that category is
+below 50%. Unknown and not-specified race records remain visible in the county
+profile but do not determine the map color.
+
+The compact population artifact is reproducible from the official Census CSV:
+
+```bash
+node scripts/build-population-metric.mjs \
+  co-est2024-alldata.csv \
+  public/data/county-population-2024.json
+```
+
+The demographic artifact is generated from `CC-EST2024-ALLDATA`:
+
+```bash
+node scripts/build-county-demographics.mjs \
+  cc-est2024-alldata.csv \
+  public/data/county-demographics-2024.json
+```
+
+The crime builder consumes the FBI's state-level 2025 NIBRS ZIP packages. The
+first argument is a temporary JSON object mapping full state names to the
+signed package URLs returned by the FBI Crime Data Explorer downloads page.
+ZIP files are cached locally so reruns do not download them again:
+
+```bash
+node scripts/build-county-crime.mjs \
+  nibrs-2025-links.json \
+  public/data/us-counties-2023.geojson \
+  public/data/county-crime-2025.json \
+  /tmp/nibrs-2025-cache
+```
+
+Future PPP, election, and HHS inputs should be normalized to the same metric
+file shape: metadata plus one numeric value per five-digit county GEOID. Raw
+records must be aggregated to county level before entering the browser bundle;
+the map should not contain source-specific joins or aggregation logic.
