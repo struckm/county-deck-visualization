@@ -10,6 +10,16 @@ import type {
   CountyCrime,
   CountyCrimeDataset,
 } from '../data/loadCrime';
+import {
+  formatCurrency,
+  type CountyPpp,
+  type CountyPppDataset,
+} from '../data/loadPpp';
+import {
+  formatMedicaidCurrency,
+  type CountyMedicaid,
+  type CountyMedicaidDataset,
+} from '../data/loadMedicaid';
 import type {CountyFeature, CountyMetric, CountyProperties} from './types';
 
 export class CountyDetailOverlay {
@@ -51,6 +61,8 @@ export class CountyDetailOverlay {
     metric: CountyMetric,
     private readonly demographics: CountyDemographicsDataset,
     private readonly crime: CountyCrimeDataset,
+    private readonly ppp: CountyPppDataset,
+    private readonly medicaid: CountyMedicaidDataset,
     private readonly onRequestClose: () => void,
   ) {
     this.county = initialCounty;
@@ -310,19 +322,34 @@ export class CountyDetailOverlay {
   }
 
   private updateProfileLabels() {
-    const isCrime = this.metric.id === this.crime.id;
-    this.demographicsToggle.textContent = isCrime ? 'Crime profile' : 'Demographics';
-    this.demographicsPanel.setAttribute(
-      'aria-label',
-      isCrime ? 'County crime profile' : 'County demographics',
-    );
-    this.demographicsEyebrow.textContent = isCrime
-      ? `${this.crime.vintage} NIBRS`
-      : `${this.demographics.vintage} demographics`;
-    this.demographicsTitle.textContent = isCrime
-      ? 'Known offender profile'
-      : 'Population profile';
-    const source = isCrime ? this.crime.source : this.demographics.source;
+    let toggle = 'Demographics';
+    let ariaLabel = 'County demographics';
+    let eyebrow = `${this.demographics.vintage} demographics`;
+    let title = 'Population profile';
+    let source = this.demographics.source;
+    if (this.metric.id === this.crime.id) {
+      toggle = 'Crime profile';
+      ariaLabel = 'County crime profile';
+      eyebrow = `${this.crime.vintage} NIBRS`;
+      title = 'Known offender profile';
+      source = this.crime.source;
+    } else if (this.metric.id === this.ppp.id) {
+      toggle = 'PPP profile';
+      ariaLabel = 'County PPP profile';
+      eyebrow = `${this.ppp.vintage} SBA`;
+      title = 'PPP borrower profile';
+      source = this.ppp.source;
+    } else if (this.metric.id === this.medicaid.id) {
+      toggle = 'Medicaid profile';
+      ariaLabel = 'County Medicaid spending profile';
+      eyebrow = `${this.medicaid.vintage} HHS`;
+      title = 'Medicaid provider spending';
+      source = this.medicaid.source;
+    }
+    this.demographicsToggle.textContent = toggle;
+    this.demographicsPanel.setAttribute('aria-label', ariaLabel);
+    this.demographicsEyebrow.textContent = eyebrow;
+    this.demographicsTitle.textContent = title;
     this.demographicsSource.textContent = source.label;
     this.demographicsSource.href = source.url;
   }
@@ -330,6 +357,14 @@ export class CountyDetailOverlay {
   private renderProfile() {
     if (this.metric.id === this.crime.id) {
       this.renderCrimeProfile();
+      return;
+    }
+    if (this.metric.id === this.ppp.id) {
+      this.renderPppProfile();
+      return;
+    }
+    if (this.metric.id === this.medicaid.id) {
+      this.renderMedicaidProfile();
       return;
     }
     const demographics = this.demographics.counties.get(
@@ -389,6 +424,124 @@ export class CountyDetailOverlay {
       caveat,
     );
   }
+
+  private renderPppProfile() {
+    const ppp = this.ppp.counties.get(this.county.properties.GEOID);
+    if (!ppp) {
+      const message = document.createElement('p');
+      message.className = 'county-detail__demographics-empty';
+      message.textContent = 'No PPP loans were attributed to this county.';
+      this.demographicsContent.replaceChildren(message);
+      return;
+    }
+    const caveat = document.createElement('p');
+    caveat.className = 'county-detail__profile-caveat';
+    caveat.textContent = this.ppp.caveat;
+    this.demographicsContent.replaceChildren(
+      createPppSummary(ppp),
+      createDemographicGroup('Borrower-reported owner gender', ppp.loans, [
+        ['Male owned', ppp.owners.male],
+        ['Female owned', ppp.owners.female],
+        ['Unanswered', ppp.owners.genderUnanswered],
+      ]),
+      createDemographicGroup('Borrower-reported owner ethnicity', ppp.loans, [
+        ['Hispanic / Latino', ppp.owners.hispanic],
+        ['Not Hispanic / Latino', ppp.owners.notHispanic],
+        ['Unanswered', ppp.owners.ethnicityUnanswered],
+      ]),
+      createDemographicGroup(
+        'Borrower-reported owner race',
+        ppp.loans,
+        pppRaceGroups(ppp),
+      ),
+      caveat,
+    );
+  }
+
+  private renderMedicaidProfile() {
+    const medicaid = this.medicaid.counties.get(this.county.properties.GEOID);
+    if (!medicaid) {
+      const message = document.createElement('p');
+      message.className = 'county-detail__demographics-empty';
+      message.textContent =
+        'No 2024 Medicaid provider spending was attributed to this county.';
+      this.demographicsContent.replaceChildren(message);
+      return;
+    }
+    const caveat = document.createElement('p');
+    caveat.className = 'county-detail__profile-caveat';
+    caveat.textContent = this.medicaid.caveat;
+    this.demographicsContent.replaceChildren(
+      createMedicaidSummary(medicaid),
+      caveat,
+    );
+  }
+}
+
+function createMedicaidSummary(medicaid: CountyMedicaid) {
+  const section = document.createElement('section');
+  const heading = document.createElement('h4');
+  heading.textContent = 'Attributed provider activity';
+  const list = document.createElement('dl');
+  list.className = 'county-detail__crime-summary';
+  const paidPerLine = medicaid.claimLines
+    ? medicaid.paid / medicaid.claimLines
+    : 0;
+  for (const [label, value] of [
+    ['Paid amount', formatMedicaidCurrency(medicaid.paid)],
+    ['Providers', formatCount(medicaid.providers)],
+    ['Claim lines', formatCount(medicaid.claimLines)],
+    ['Paid per claim line', formatMedicaidCurrency(paidPerLine)],
+    ['Published service cells', formatCount(medicaid.serviceCells)],
+    ['Negative adjustment cells', formatCount(medicaid.adjustmentCells)],
+  ]) {
+    const row = document.createElement('div');
+    const term = document.createElement('dt');
+    const detail = document.createElement('dd');
+    term.textContent = label;
+    detail.textContent = value;
+    row.append(term, detail);
+    list.append(row);
+  }
+  section.append(heading, list);
+  return section;
+}
+
+function createPppSummary(ppp: CountyPpp) {
+  const section = document.createElement('section');
+  const heading = document.createElement('h4');
+  heading.textContent = 'PPP activity';
+  const list = document.createElement('dl');
+  list.className = 'county-detail__crime-summary';
+  for (const [label, value] of [
+    ['Loans', formatCount(ppp.loans)],
+    ['Approved amount', formatCurrency(ppp.approved)],
+    ['Forgiveness amount', formatCurrency(ppp.forgiven)],
+    ['Jobs reported', formatCount(ppp.jobs)],
+  ]) {
+    const row = document.createElement('div');
+    const term = document.createElement('dt');
+    const detail = document.createElement('dd');
+    term.textContent = label;
+    detail.textContent = value;
+    row.append(term, detail);
+    list.append(row);
+  }
+  section.append(heading, list);
+  return section;
+}
+
+function pppRaceGroups(ppp: CountyPpp): Array<[string, number]> {
+  return [
+    ['White', ppp.owners.white],
+    ['Black / African American', ppp.owners.black],
+    ['American Indian / Alaska Native', ppp.owners.native],
+    ['Asian', ppp.owners.asian],
+    ['Native Hawaiian / Pacific Islander', ppp.owners.pacificIslander],
+    ['Multiple races', ppp.owners.multiracial],
+    ['Other reported race', ppp.owners.otherRace],
+    ['Unanswered', ppp.owners.raceUnanswered],
+  ];
 }
 
 function createCrimeSummary(crime: CountyCrime) {

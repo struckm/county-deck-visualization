@@ -3,6 +3,8 @@ import {loadCounties} from './data/loadCounties';
 import {loadCountyMetric} from './data/loadMetric';
 import {loadCountyDemographics} from './data/loadDemographics';
 import {createCrimeMetric, loadCountyCrime} from './data/loadCrime';
+import {createPppMetric, loadCountyPpp} from './data/loadPpp';
+import {createMedicaidMetric, loadCountyMedicaid} from './data/loadMedicaid';
 import {createEthnicityOverlay} from './data/ethnicityOverlay';
 import {createCrimeRaceOverlay} from './data/crimeRaceOverlay';
 import {CountyChoropleth} from './map/CountyChoropleth';
@@ -93,19 +95,24 @@ export class CountyMapApp {
 
   async start() {
     try {
-      const [counties, population, demographics, crime] = await Promise.all([
-        loadCounties(this.abortController.signal),
-        loadCountyMetric(
-          '/data/county-population-2024.json',
-          (value) => new Intl.NumberFormat('en-US').format(value),
-          this.abortController.signal,
-        ),
-        loadCountyDemographics(this.abortController.signal),
-        loadCountyCrime(this.abortController.signal),
-      ]);
+      const [counties, population, demographics, crime, ppp, medicaid] =
+        await Promise.all([
+          loadCounties(this.abortController.signal),
+          loadCountyMetric(
+            '/data/county-population-2024.json',
+            (value) => new Intl.NumberFormat('en-US').format(value),
+            this.abortController.signal,
+          ),
+          loadCountyDemographics(this.abortController.signal),
+          loadCountyCrime(this.abortController.signal),
+          loadCountyPpp(this.abortController.signal),
+          loadCountyMedicaid(this.abortController.signal),
+        ]);
       if (this.abortController.signal.aborted) return;
       this.metrics = [
         population,
+        createPppMetric(ppp),
+        createMedicaidMetric(medicaid),
         createCrimeMetric(crime),
         createLandAreaMetric(counties),
       ];
@@ -136,6 +143,8 @@ export class CountyMapApp {
         initialMetric,
         demographics,
         crime,
+        ppp,
+        medicaid,
         () => this.clearSelection(),
       );
     } catch (error) {

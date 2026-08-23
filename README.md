@@ -2,8 +2,8 @@
 
 A small, reusable TypeScript + Deck.gl county choropleth using the 2023 Census
 1:5,000,000 cartographic boundary file. The metric selector currently includes
-county population, FBI-reported offenses, land area, and a categorical
-race/ethnicity view.
+county population, PPP approved amount, FBI-reported offenses, land area, and
+Medicaid provider spending, plus categorical race/ethnicity views.
 The application uses direct DOM updates and persistent `Deck` instances; it has
 no UI framework or component runtime.
 
@@ -94,6 +94,36 @@ largest reported known-offender race category, even when that category is
 below 50%. Unknown and not-specified race records remain visible in the county
 profile but do not determine the map color.
 
+`public/data/county-ppp.json` aggregates all 2020–2021 loans in the local
+`ppp-data` PostgreSQL database to Census county GEOIDs. Selecting “PPP approved
+amount” colors counties by current approval amount and changes the county
+detail card to show loan count, approved and forgiveness amounts, jobs
+reported, and borrower-reported owner gender, ethnicity, and race. Approved
+amount and forgiveness are deliberately shown as separate measures, and
+unanswered demographic fields remain visible.
+
+County names provide the primary join. The builder uses official Census
+ZIP-to-county relationship files for ambiguous independent cities and to map
+Connecticut's former counties into the planning regions used by the 2023
+boundary file. Of 11,468,210 database rows, 11,467,137 are represented in the
+artifact; 630 lack a county and 443 have county/ZIP values that cannot be
+matched.
+
+`public/data/county-medicaid-2024.json` aggregates the HHS Medicaid Provider
+Spending by HCPCS data in the local `medicaid_fraud` database. Selecting
+“Medicaid paid amount” colors counties by 2024 Medicaid and CHIP payments and
+changes the detail card to show attributed providers, claim lines, paid amount
+per line, published aggregate cells, and negative adjustment cells.
+
+This layer is provider spending, not evidence or a finding of fraud. Spending
+is attributed to the servicing provider's current NPPES practice ZIP, with the
+billing provider as fallback; it does not represent patient residence or
+necessarily the service location. The source suppresses provider/procedure/month
+cells with fewer than 12 patients or fewer than 12 claim lines. The artifact
+maps $190.3 billion to 3,143 counties. Another $1.94 billion is associated with
+1,062 postal ZIPs that have no Census ZCTA-to-county relationship, most often
+institutional or unique-use ZIP codes.
+
 The compact population artifact is reproducible from the official Census CSV:
 
 ```bash
@@ -123,7 +153,29 @@ node scripts/build-county-crime.mjs \
   /tmp/nibrs-2025-cache
 ```
 
-Future PPP, election, and HHS inputs should be normalized to the same metric
+The PPP artifact is generated from the local `ppp-data` database. The builder
+downloads the official Census ZIP relationship files needed for fallback
+county attribution:
+
+```bash
+node scripts/build-county-ppp.mjs \
+  public/data/us-counties-2023.geojson \
+  public/data/county-ppp.json \
+  ppp-data
+```
+
+The Medicaid artifact is generated with a temporary read-only aggregation of
+the local database and the official Census ZIP relationship files:
+
+```bash
+node scripts/build-county-medicaid.mjs \
+  public/data/us-counties-2023.geojson \
+  public/data/county-medicaid-2024.json \
+  medicaid_fraud \
+  2024
+```
+
+Future election and HHS inputs should be normalized to the same metric
 file shape: metadata plus one numeric value per five-digit county GEOID. Raw
 records must be aggregated to county level before entering the browser bundle;
 the map should not contain source-specific joins or aggregation logic.
