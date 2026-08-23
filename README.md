@@ -1,7 +1,14 @@
 # U.S. county Deck.gl foundation
 
-A small, reusable React + Deck.gl county choropleth using the 2023 Census
+A small, reusable TypeScript + Deck.gl county choropleth using the 2023 Census
 1:5,000,000 cartographic boundary file. The example metric is county land area.
+The application uses direct DOM updates and persistent `Deck` instances; it has
+no UI framework or component runtime.
+
+Click a county to open a focused detail overlay. The overlay fits the selected
+geometry into its own independently interactive Deck.gl view and exposes the
+county metric, water area, GEOID, and state. Close it with the × button, the
+Escape key, or a click outside the panel.
 
 ## Run locally
 
@@ -14,9 +21,9 @@ npm run dev
 
 `CountyChoropleth` receives geometry and metric data separately. Create a
 `CountyMetric` whose `values` map is keyed by the Census five-digit county
-`GEOID`, then pass it to the component:
+`GEOID`, then pass it to the map:
 
-```tsx
+```ts
 const metric = {
   id: 'example',
   label: 'Example metric',
@@ -27,11 +34,21 @@ const metric = {
   formatValue: (value: number) => value.toFixed(1),
 };
 
-<CountyChoropleth counties={counties} metric={metric} />;
+const map = new CountyChoropleth(
+  container,
+  counties,
+  metric,
+  (county) => showCountyDetail(county),
+);
 ```
 
-The component owns rendering, hover, selection highlighting, and the legend;
-the application owns loading, metric construction, and selected-county state.
+The long-lived choropleth object owns rendering, hover, selection highlighting,
+and the legend; the application owns loading, metric construction, and
+selected-county state through direct method calls.
+`CountyDetailOverlay` is a separate detail surface, so county-specific layers
+such as Census tracts or local facilities can be added without coupling them to
+the national layer. Its Deck.gl renderer is measured and warmed while hidden,
+then reused across selections so the blurred detail surface opens promptly.
 
 ## Data
 

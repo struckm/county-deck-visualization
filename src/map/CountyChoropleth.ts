@@ -1,0 +1,244 @@
+import {Deck} from '@deck.gl/core';
+import type {MapViewState, PickingInfo} from '@deck.gl/core';
+import {GeoJsonLayer} from '@deck.gl/layers';
+import {createQuantileScale, DEFAULT_PALETTE} from './colorScale';
+import type {
+  Color,
+  CountyFeature,
+  CountyFeatureCollection,
+  CountyMetric,
+  CountyProperties,
+} from './types';
+
+const US_VIEW_STATE: MapViewState = {
+  longitude: -98.4,
+  latitude: 38.1,
+  zoom: 3.25,
+  minZoom: 2,
+  maxZoom: 12,
+  pitch: 0,
+  bearing: 0,
+};
+
+export class CountyChoropleth {
+  readonly deck: Deck;
+  private readonly countiesByGeoid: Map<string, CountyFeature>;
+  private readonly mainLayer: GeoJsonLayer<CountyProperties>;
+  private readonly resizeObserver: ResizeObserver;
+  private selectionLayer: GeoJsonLayer<CountyProperties>;
+  private hoveredCounty: CountyFeature | null = null;
+  private pointerStart: {
+    x: number;
+    y: number;
+    county: CountyFeature | null;
+  } | null = null;
+  private lastImmediateSelection = 0;
+  private initialViewRenderCount = 0;
+  private initialViewFrame = 0;
+  private readonly handleAfterRender = () => {
+    if (this.initialViewRenderCount === 0) {
+      this.initialViewRenderCount = 1;
+      this.initialViewFrame = requestAnimationFrame(() => {
+        if (this.initialViewRenderCount !== 1) return;
+        this.deck.setProps({
+          initialViewState: responsiveViewState(this.container.clientWidth),
+        });
+      });
+      return;
+    }
+    if (this.initialViewRenderCount === 1) {
+      this.initialViewRenderCount = 2;
+      cancelAnimationFrame(this.initialViewFrame);
+      this.container.classList.remove('map--loading');
+      this.onReady();
+    }
+  };
+  private readonly handlePointerDown = (event: PointerEvent) => {
+    if (
+      event.button !== 0 ||
+      !event.isPrimary ||
+      !(event.target instanceof HTMLCanvasElement)
+    ) {
+      return;
+    }
+    this.pointerStart = {
+      x: event.clientX,
+      y: event.clientY,
+      county: this.hoveredCounty,
+    };
+  };
+  private readonly handlePointerUp = (event: PointerEvent) => {
+    const start = this.pointerStart;
+    this.pointerStart = null;
+    if (!start || !event.isPrimary) return;
+    const movement = Math.hypot(event.clientX - start.x, event.clientY - start.y);
+    if (movement > 4) return;
+    markPopupInput();
+    const bounds = this.container.getBoundingClientRect();
+    const picked =
+      start.county ??
+      (this.deck.pickObject({
+        x: event.clientX - bounds.left,
+        y: event.clientY - bounds.top,
+        layerIds: [this.mainLayer.id],
+      })?.object as CountyFeature | undefined);
+    if (!picked) return;
+    this.lastImmediateSelection = performance.now();
+    this.onSelect(picked);
+  };
+  private readonly handlePointerCancel = () => {
+    this.pointerStart = null;
+  };
+
+  constructor(
+    private readonly container: HTMLDivElement,
+    counties: CountyFeatureCollection,
+    private readonly metric: CountyMetric,
+    private readonly onSelect: (county: CountyFeature) => void,
+    private readonly onReady: () => void = () => {},
+  ) {
+    const scale = createQuantileScale([...metric.values.values()]);
+    this.countiesByGeoid = new Map(
+      counties.features.map((county) => [county.properties.GEOID, county]),
+    );
+    this.mainLayer = new GeoJsonLayer<CountyProperties>({
+      id: `counties-${metric.id}`,
+      data: counties,
+      filled: true,
+      stroked: true,
+      pickable: true,
+      autoHighlight: true,
+      highlightColor: [255, 255, 255, 80],
+      getFillColor: (feature) =>
+        scale.colorFor(metric.values.get(feature.properties.GEOID)),
+      getLineColor: [255, 255, 255, 115],
+      getLineWidth: 0.7,
+      lineWidthUnits: 'pixels',
+      lineWidthMinPixels: 0.35,
+      onClick: ({object}: PickingInfo<CountyFeature>) => {
+        if (
+          object &&
+          performance.now() - this.lastImmediateSelection > 150
+        ) {
+          markPopupInput();
+          this.onSelect(object);
+        }
+      },
+    });
+    this.selectionLayer = this.createSelectionLayer();
+
+    this.deck = new Deck({
+      parent: container,
+      initialViewState: responsiveViewState(container.clientWidth),
+      controller: {dragRotate: false, touchRotate: false},
+      layers: [this.mainLayer, this.selectionLayer],
+      getCursor: ({isDragging, isHovering}) =>
+        isDragging ? 'grabbing' : isHovering ? 'pointer' : 'grab',
+      onAfterRender: this.handleAfterRender,
+      onHover: ({object}: PickingInfo<CountyFeature>) => {
+        this.hoveredCounty = object ?? null;
+      },
+      getTooltip: ({object}: PickingInfo<CountyFeature>) => {
+        if (!object) return null;
+        const value = metric.values.get(object.properties.GEOID);
+        return {
+          text: `${object.properties.NAMELSAD}, ${object.properties.STUSPS}\n${metric.label}: ${value == null ? 'No data' : metric.formatValue(value)}`,
+          className: 'county-tooltip',
+        };
+      },
+    });
+
+    this.container.append(createLegend(metric, scale));
+    this.resizeObserver = new ResizeObserver(([entry]) => {
+      this.deck.setProps({
+        initialViewState: responsiveViewState(entry.contentRect.width),
+      });
+    });
+    this.resizeObserver.observe(container);
+    container.addEventListener('pointerdown', this.handlePointerDown);
+    container.addEventListener('pointerup', this.handlePointerUp);
+    container.addEventListener('pointercancel', this.handlePointerCancel);
+  }
+
+  setSelection(geoid: string | null) {
+    this.selectionLayer = this.createSelectionLayer(
+      geoid ? this.countiesByGeoid.get(geoid) : undefined,
+    );
+    this.deck.setProps({layers: [this.mainLayer, this.selectionLayer]});
+  }
+
+  destroy() {
+    cancelAnimationFrame(this.initialViewFrame);
+    this.resizeObserver.disconnect();
+    this.container.removeEventListener('pointerdown', this.handlePointerDown);
+    this.container.removeEventListener('pointerup', this.handlePointerUp);
+    this.container.removeEventListener('pointercancel', this.handlePointerCancel);
+    this.deck.finalize();
+  }
+
+  private createSelectionLayer(county?: CountyFeature) {
+    return new GeoJsonLayer<CountyProperties>({
+      id: 'selected-county',
+      data: county ? [county] : [],
+      filled: false,
+      stroked: true,
+      pickable: false,
+      getLineColor: [239, 183, 74, 255],
+      getLineWidth: 3,
+      lineWidthUnits: 'pixels',
+    });
+  }
+}
+
+function markPopupInput() {
+  if (!import.meta.env.DEV) return;
+  performance.clearMarks('county-popup-input');
+  performance.mark('county-popup-input');
+}
+
+function responsiveViewState(containerWidth: number): MapViewState {
+  const zoomAdjustment = Math.min(0, Math.log2(containerWidth / 960));
+  return {
+    ...US_VIEW_STATE,
+    zoom: US_VIEW_STATE.zoom + zoomAdjustment,
+    minZoom: 1.25,
+  };
+}
+
+function createLegend(
+  metric: CountyMetric,
+  scale: ReturnType<typeof createQuantileScale>,
+) {
+  const legend = document.createElement('div');
+  legend.className = 'map-legend';
+  legend.setAttribute('aria-label', `${metric.label} legend`);
+
+  const label = document.createElement('div');
+  label.className = 'map-legend__label';
+  label.textContent = metric.label;
+
+  const swatches = document.createElement('div');
+  swatches.className = 'map-legend__swatches';
+  swatches.setAttribute('aria-hidden', 'true');
+  const boundaries = [scale.domain[0], ...scale.thresholds, scale.domain[1]];
+  DEFAULT_PALETTE.forEach((color, index) => {
+    const swatch = document.createElement('span');
+    swatch.style.background = toCssColor(color);
+    swatch.title = `${metric.formatValue(boundaries[index])}–${metric.formatValue(boundaries[index + 1])}`;
+    swatches.append(swatch);
+  });
+
+  const range = document.createElement('div');
+  range.className = 'map-legend__range';
+  const minimum = document.createElement('span');
+  minimum.textContent = metric.formatValue(scale.domain[0]);
+  const maximum = document.createElement('span');
+  maximum.textContent = metric.formatValue(scale.domain[1]);
+  range.append(minimum, maximum);
+  legend.append(label, swatches, range);
+  return legend;
+}
+
+function toCssColor([red, green, blue, alpha]: Color) {
+  return `rgba(${red}, ${green}, ${blue}, ${alpha / 255})`;
+}

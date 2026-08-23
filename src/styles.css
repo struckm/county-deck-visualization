@@ -46,6 +46,7 @@ button { font: inherit; }
 }
 
 h1 { margin: 5px 0 3px; font-size: clamp(1.65rem, 3vw, 2.7rem); line-height: 1.08; letter-spacing: -0.035em; }
+h2 { margin: 4px 0 0; font-size: clamp(1.2rem, 2.4vw, 1.8rem); line-height: 1.1; letter-spacing: -0.025em; }
 .app-header p { margin: 0; color: #a6b9bd; }
 .source-note { color: #78949a; font-size: 0.78rem; white-space: nowrap; }
 
@@ -64,11 +65,13 @@ h1 { margin: 5px 0 3px; font-size: clamp(1.65rem, 3vw, 2.7rem); line-height: 1.0
 }
 
 .map { position: absolute; inset: 0; }
+.map--loading { visibility: hidden; }
 .map canvas { outline: none; }
 
 .map-status {
   position: absolute;
   inset: 0;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -117,6 +120,162 @@ h1 { margin: 5px 0 3px; font-size: clamp(1.65rem, 3vw, 2.7rem); line-height: 1.0
   font: 500 12px/1.5 Inter, ui-sans-serif, system-ui, sans-serif !important;
 }
 
+.county-detail-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: clamp(12px, 3vw, 34px);
+  visibility: hidden;
+  pointer-events: none;
+  transition: visibility 0s linear 95ms;
+}
+
+.county-detail-scrim::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0;
+  background: rgba(3, 12, 14, 0.74);
+  backdrop-filter: blur(0);
+  transition:
+    opacity 80ms ease-in,
+    backdrop-filter 80ms ease-in;
+  will-change: opacity, backdrop-filter;
+}
+
+.county-detail-scrim--open {
+  visibility: visible;
+  pointer-events: auto;
+  transition: visibility 0s linear 0s;
+}
+
+.county-detail-scrim--open::before {
+  opacity: 1;
+  backdrop-filter: blur(4px);
+  transition-timing-function: ease-out;
+}
+
+.county-detail {
+  width: min(900px, 100%);
+  height: min(620px, 100%);
+  min-height: 420px;
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto minmax(230px, 1fr) auto;
+  border: 1px solid rgba(183, 217, 222, 0.2);
+  border-radius: 12px;
+  background: #0d1d20;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.56);
+  transform: translateY(8px) scale(0.992);
+  transition: transform 90ms ease-in;
+  will-change: transform;
+}
+
+.county-detail-scrim--open .county-detail {
+  transform: translateY(0) scale(1);
+  transition-timing-function: ease-out;
+}
+
+.county-detail__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 17px 20px 15px;
+  border-bottom: 1px solid rgba(183, 217, 222, 0.11);
+}
+
+.county-detail__close {
+  width: 36px;
+  height: 36px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  padding: 0 0 3px;
+  border: 1px solid rgba(194, 219, 223, 0.18);
+  border-radius: 50%;
+  color: #b9cacc;
+  background: transparent;
+  cursor: pointer;
+  font-size: 1.45rem;
+  line-height: 1;
+}
+
+.county-detail__close:hover,
+.county-detail__close:focus-visible {
+  border-color: rgba(239, 183, 74, 0.65);
+  color: #f0c97e;
+  outline: none;
+}
+
+.county-detail__map {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  background:
+    linear-gradient(rgba(119, 174, 181, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(119, 174, 181, 0.045) 1px, transparent 1px),
+    #102225;
+  background-size: 28px 28px;
+}
+
+.county-detail__map canvas {
+  opacity: 0;
+  outline: none;
+  transition: none;
+}
+
+.county-detail-scrim--open .county-detail__map canvas {
+  opacity: 1;
+}
+
+.county-detail-scrim--updating .county-detail__map canvas {
+  opacity: 0;
+  transition: none;
+}
+
+.county-detail__map-note {
+  position: absolute;
+  right: 14px;
+  bottom: 11px;
+  z-index: 1;
+  color: #769096;
+  font-size: 0.68rem;
+  pointer-events: none;
+}
+
+.county-detail__stats {
+  margin: 0;
+  padding: 15px 20px 17px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
+  border-top: 1px solid rgba(183, 217, 222, 0.11);
+}
+
+.county-detail__stats div { min-width: 0; }
+.county-detail__stats dt {
+  color: #729096;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.county-detail__stats dd {
+  margin: 5px 0 0;
+  overflow: hidden;
+  color: #e0eaeb;
+  font-size: 0.86rem;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .detail-bar {
   min-height: 54px;
   display: flex;
@@ -145,8 +304,16 @@ h1 { margin: 5px 0 3px; font-size: clamp(1.65rem, 3vw, 2.7rem); line-height: 1.0
   .source-note { display: none; }
   .detail-bar { flex-wrap: wrap; gap: 14px 28px; }
   .detail-bar button { margin-left: 0; }
+  .county-detail-scrim { padding: 8px; }
+  .county-detail { height: calc(100% - 4px); min-height: 0; grid-template-rows: auto minmax(180px, 1fr) auto; }
+  .county-detail__header { padding: 14px 15px 12px; }
+  .county-detail__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 18px; padding: 13px 15px 15px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .spinner { animation: none; }
+  .county-detail-scrim,
+  .county-detail-scrim::before,
+  .county-detail,
+  .county-detail__map canvas { transition: none; }
 }
