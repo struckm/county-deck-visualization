@@ -1,4 +1,3 @@
-import {createLandAreaMetric} from './data/sampleMetric';
 import {loadCounties} from './data/loadCounties';
 import {loadCountyMetric} from './data/loadMetric';
 import {loadCountyDemographics} from './data/loadDemographics';
@@ -114,7 +113,6 @@ export class CountyMapApp {
         createPppMetric(ppp),
         createMedicaidMetric(medicaid),
         createCrimeMetric(crime),
-        createLandAreaMetric(counties),
       ];
       this.categoryOverlays = [
         createEthnicityOverlay(demographics),

@@ -2,8 +2,8 @@
 
 A small, reusable TypeScript + Deck.gl county choropleth using the 2023 Census
 1:5,000,000 cartographic boundary file. The metric selector currently includes
-county population, PPP approved amount, FBI-reported offenses, land area, and
-Medicaid provider spending, plus categorical race/ethnicity views.
+county population, PPP approved amount, FBI-reported offenses, and Medicaid
+provider spending, plus categorical race/ethnicity views.
 The application uses direct DOM updates and persistent `Deck` instances; it has
 no UI framework or component runtime.
 
