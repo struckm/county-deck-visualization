@@ -339,7 +339,7 @@ export class CountyDetailOverlay {
       eyebrow = `${this.ppp.vintage} SBA`;
       title = 'PPP borrower profile';
       source = this.ppp.source;
-    } else if (this.metric.id === this.medicaid.id) {
+    } else if (this.isMedicaidMetric()) {
       toggle = 'Medicaid profile';
       ariaLabel = 'County Medicaid spending profile';
       eyebrow = `${this.medicaid.vintage} HHS`;
@@ -363,7 +363,7 @@ export class CountyDetailOverlay {
       this.renderPppProfile();
       return;
     }
-    if (this.metric.id === this.medicaid.id) {
+    if (this.isMedicaidMetric()) {
       this.renderMedicaidProfile();
       return;
     }
@@ -381,6 +381,16 @@ export class CountyDetailOverlay {
       createDemographicGroup('Sex', demographics.total, [
         ['Female', demographics.female],
         ['Male', demographics.male],
+      ]),
+      createDemographicGroup('Age 65+ total', demographics.total, [
+        ['Residents age 65+', demographics.age65Plus],
+      ]),
+      createDemographicGroup('Age 65+ breakdown', demographics.age65Plus, [
+        ['65–69', demographics.age65To69],
+        ['70–74', demographics.age70To74],
+        ['75–79', demographics.age75To79],
+        ['80–84', demographics.age80To84],
+        ['85+', demographics.age85Plus],
       ]),
       createDemographicGroup(
         'Race & ethnicity',
@@ -471,14 +481,27 @@ export class CountyDetailOverlay {
     const caveat = document.createElement('p');
     caveat.className = 'county-detail__profile-caveat';
     caveat.textContent = this.medicaid.caveat;
+    const demographics = this.demographics.counties.get(
+      this.county.properties.GEOID,
+    );
     this.demographicsContent.replaceChildren(
-      createMedicaidSummary(medicaid),
+      createMedicaidSummary(medicaid, demographics),
       caveat,
+    );
+  }
+
+  private isMedicaidMetric() {
+    return (
+      this.metric.id === this.medicaid.id ||
+      this.metric.id.startsWith(`${this.medicaid.id}-`)
     );
   }
 }
 
-function createMedicaidSummary(medicaid: CountyMedicaid) {
+function createMedicaidSummary(
+  medicaid: CountyMedicaid,
+  demographics?: CountyDemographics,
+) {
   const section = document.createElement('section');
   const heading = document.createElement('h4');
   heading.textContent = 'Attributed provider activity';
@@ -487,14 +510,26 @@ function createMedicaidSummary(medicaid: CountyMedicaid) {
   const paidPerLine = medicaid.claimLines
     ? medicaid.paid / medicaid.claimLines
     : 0;
-  for (const [label, value] of [
+  const rows: Array<[string, string]> = [
     ['Paid amount', formatMedicaidCurrency(medicaid.paid)],
     ['Providers', formatCount(medicaid.providers)],
     ['Claim lines', formatCount(medicaid.claimLines)],
     ['Paid per claim line', formatMedicaidCurrency(paidPerLine)],
     ['Published service cells', formatCount(medicaid.serviceCells)],
     ['Negative adjustment cells', formatCount(medicaid.adjustmentCells)],
-  ]) {
+  ];
+  if (demographics) {
+    rows.splice(
+      1,
+      0,
+      ['Resident population age 65+', formatCount(demographics.age65Plus)],
+      [
+        'Paid per resident age 65+',
+        formatMedicaidCurrency(medicaid.paid / demographics.age65Plus),
+      ],
+    );
+  }
+  for (const [label, value] of rows) {
     const row = document.createElement('div');
     const term = document.createElement('dt');
     const detail = document.createElement('dd');

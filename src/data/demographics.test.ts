@@ -20,6 +20,14 @@ describe('county demographics artifact', () => {
           county.pacificIslanderNonHispanic +
           county.multiracialNonHispanic,
       ).toBe(county.total);
+      expect(
+        county.age65To69 +
+          county.age70To74 +
+          county.age75To79 +
+          county.age80To84 +
+          county.age85Plus,
+      ).toBe(county.age65Plus);
+      expect(county.age65Plus).toBeLessThanOrEqual(county.total);
     }
   });
 });

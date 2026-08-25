@@ -66,7 +66,9 @@ records for American Samoa, Guam, the Northern Mariana Islands, Puerto Rico, or
 the U.S. Virgin Islands, so those areas intentionally display as no data.
 
 `public/data/county-demographics-2024.json` adds matching July 1, 2024 sex,
-race, and Hispanic-origin estimates to the county detail overlay. Its
+age 65+, race, and Hispanic-origin estimates to the county detail overlay. The
+older-population total sums Census `AGEGRP` 14 through 18 (ages 65–69, 70–74,
+75–79, 80–84, and 85+). Its
 race/ethnicity bars are mutually exclusive: Hispanic/Latino of any race plus
 six non-Hispanic race groups. This ensures the categories sum to the displayed
 county population rather than double-counting people.
@@ -75,6 +77,16 @@ The main Metric selector includes a categorical “Largest race & ethnicity
 group” view. It colors every covered county by its largest mutually exclusive
 group, even when that group is below 50% of residents. Groups that do not lead
 in any county are omitted from the legend.
+
+The metric selector also includes the resident population age 65+ and Medicaid
+paid per resident age 65+. The latter divides all attributed Medicaid and CHIP
+provider payments by the older resident population. It is a screening measure,
+not spending on older beneficiaries: payment geography reflects provider
+practice location, while the Census denominator reflects resident population.
+It has values for the 3,060 counties covered by both sources. Guam, the
+Northern Mariana Islands, Puerto Rico, and the U.S. Virgin Islands retain
+Medicaid totals but display no normalized value because this Census age file
+does not provide their denominator.
 
 `public/data/county-crime-2025.json` aggregates 2025 FBI National
 Incident-Based Reporting System (NIBRS) Group A offenses to Census county

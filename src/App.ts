@@ -1,9 +1,16 @@
 import {loadCounties} from './data/loadCounties';
 import {loadCountyMetric} from './data/loadMetric';
-import {loadCountyDemographics} from './data/loadDemographics';
+import {
+  createOlderPopulationMetric,
+  loadCountyDemographics,
+} from './data/loadDemographics';
 import {createCrimeMetric, loadCountyCrime} from './data/loadCrime';
 import {createPppMetric, loadCountyPpp} from './data/loadPpp';
-import {createMedicaidMetric, loadCountyMedicaid} from './data/loadMedicaid';
+import {
+  createMedicaidMetric,
+  createMedicaidPerOlderResidentMetric,
+  loadCountyMedicaid,
+} from './data/loadMedicaid';
 import {createEthnicityOverlay} from './data/ethnicityOverlay';
 import {createCrimeRaceOverlay} from './data/crimeRaceOverlay';
 import {CountyChoropleth} from './map/CountyChoropleth';
@@ -110,8 +117,10 @@ export class CountyMapApp {
       if (this.abortController.signal.aborted) return;
       this.metrics = [
         population,
-        createPppMetric(ppp),
+        createOlderPopulationMetric(demographics),
+        createMedicaidPerOlderResidentMetric(medicaid, demographics),
         createMedicaidMetric(medicaid),
+        createPppMetric(ppp),
         createCrimeMetric(crime),
       ];
       this.categoryOverlays = [

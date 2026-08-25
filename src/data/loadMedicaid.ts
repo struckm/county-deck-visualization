@@ -1,4 +1,5 @@
 import type {CountyMetric} from '../map/types';
+import type {CountyDemographicsDataset} from './loadDemographics';
 
 export type CountyMedicaid = {
   providers: number;
@@ -46,6 +47,33 @@ export function createMedicaidMetric(
     values: new Map(
       [...medicaid.counties].map(([geoid, county]) => [geoid, county.paid]),
     ),
+    formatValue: formatMedicaidCurrency,
+  };
+}
+
+export function createMedicaidPerOlderResidentMetric(
+  medicaid: CountyMedicaidDataset,
+  demographics: CountyDemographicsDataset,
+): CountyMetric {
+  const values = new Map<string, number | null>();
+  for (const [geoid, county] of medicaid.counties) {
+    const olderPopulation = demographics.counties.get(geoid)?.age65Plus;
+    values.set(
+      geoid,
+      olderPopulation == null || olderPopulation === 0
+        ? null
+        : county.paid / olderPopulation,
+    );
+  }
+  return {
+    id: `${medicaid.id}-per-resident-65-plus`,
+    label: 'Medicaid paid per resident age 65+',
+    description:
+      'All Medicaid and CHIP provider payments attributed to county provider location, divided by the county resident population age 65+; this is a screening indicator, not spending on older beneficiaries',
+    vintage: medicaid.vintage,
+    source: medicaid.source,
+    scale: 'quantile',
+    values,
     formatValue: formatMedicaidCurrency,
   };
 }

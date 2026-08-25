@@ -1,3 +1,5 @@
+import type {CountyMetric} from '../map/types';
+
 export type CountyDemographics = {
   total: number;
   male: number;
@@ -9,6 +11,12 @@ export type CountyDemographics = {
   asianNonHispanic: number;
   pacificIslanderNonHispanic: number;
   multiracialNonHispanic: number;
+  age65To69: number;
+  age70To74: number;
+  age75To79: number;
+  age80To84: number;
+  age85Plus: number;
+  age65Plus: number;
 };
 
 export type CountyDemographicsDataset = {
@@ -34,4 +42,25 @@ export async function loadCountyDemographics(
   }
   const file = (await response.json()) as CountyDemographicsFile;
   return {...file, counties: new Map(Object.entries(file.counties))};
+}
+
+export function createOlderPopulationMetric(
+  demographics: CountyDemographicsDataset,
+): CountyMetric {
+  return {
+    id: 'population-age-65-plus-2024',
+    label: 'Population age 65+',
+    description:
+      'Estimated resident population age 65 and older on July 1, 2024 (Census AGEGRP 14–18)',
+    vintage: demographics.vintage,
+    source: demographics.source,
+    scale: 'log',
+    values: new Map(
+      [...demographics.counties].map(([geoid, county]) => [
+        geoid,
+        county.age65Plus,
+      ]),
+    ),
+    formatValue: (value) => new Intl.NumberFormat('en-US').format(value),
+  };
 }
