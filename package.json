@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:data:medicaid-enrollment": "node scripts/build-county-medicaid-enrollment.mjs public/data/us-counties-2023.geojson public/data/county-medicaid-enrollment-2024.json public/data/county-medicaid-enrollment-2024.csv 2024",
     "test": "vitest run",
     "preview": "vite preview"
   },

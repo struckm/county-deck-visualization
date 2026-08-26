@@ -2,8 +2,9 @@
 
 A small, reusable TypeScript + Deck.gl county choropleth using the 2023 Census
 1:5,000,000 cartographic boundary file. The metric selector currently includes
-county population, PPP approved amount, FBI-reported offenses, and Medicaid
-provider spending, plus categorical race/ethnicity views.
+county population, PPP approved amount, FBI-reported offenses, Medicaid
+coverage estimates, and Medicaid provider spending, plus categorical
+race/ethnicity views.
 The application uses direct DOM updates and persistent `Deck` instances; it has
 no UI framework or component runtime.
 
@@ -59,6 +60,11 @@ then reused across selections so the blurred detail surface opens promptly.
 shapefile and retains only the fields used by the visualization. The source
 uses NAD83; the browser-ready file is explicitly written as EPSG:4326.
 
+`public/data/us-states-2023.geojson` is the matching Census 1:5,000,000 state
+cartographic boundary file. It is rendered as a separate, thicker outline above
+the county polygons so state borders remain visually distinct from county
+borders at every zoom level.
+
 `public/data/county-population-2024.json` contains 3,144 county and
 county-equivalent estimates from the Census Population Estimates Program. All
 3,144 records join to the boundary file. The source does not provide matching
@@ -66,10 +72,9 @@ records for American Samoa, Guam, the Northern Mariana Islands, Puerto Rico, or
 the U.S. Virgin Islands, so those areas intentionally display as no data.
 
 `public/data/county-demographics-2024.json` adds matching July 1, 2024 sex,
-age 65+, race, and Hispanic-origin estimates to the county detail overlay. The
-older-population total sums Census `AGEGRP` 14 through 18 (ages 65–69, 70–74,
-75–79, 80–84, and 85+). Its
-race/ethnicity bars are mutually exclusive: Hispanic/Latino of any race plus
+race, and Hispanic-origin estimates to the county detail overlay. The artifact
+retains age-65+ fields for analysis, but the population popup does not display
+them. Its race/ethnicity bars are mutually exclusive: Hispanic/Latino of any race plus
 six non-Hispanic race groups. This ensures the categories sum to the displayed
 county population rather than double-counting people.
 
@@ -77,16 +82,6 @@ The main Metric selector includes a categorical “Largest race & ethnicity
 group” view. It colors every covered county by its largest mutually exclusive
 group, even when that group is below 50% of residents. Groups that do not lead
 in any county are omitted from the legend.
-
-The metric selector also includes the resident population age 65+ and Medicaid
-paid per resident age 65+. The latter divides all attributed Medicaid and CHIP
-provider payments by the older resident population. It is a screening measure,
-not spending on older beneficiaries: payment geography reflects provider
-practice location, while the Census denominator reflects resident population.
-It has values for the 3,060 counties covered by both sources. Guam, the
-Northern Mariana Islands, Puerto Rico, and the U.S. Virgin Islands retain
-Medicaid totals but display no normalized value because this Census age file
-does not provide their denominator.
 
 `public/data/county-crime-2025.json` aggregates 2025 FBI National
 Incident-Based Reporting System (NIBRS) Group A offenses to Census county
@@ -135,6 +130,34 @@ cells with fewer than 12 patients or fewer than 12 claim lines. The artifact
 maps $190.3 billion to 3,143 counties. Another $1.94 billion is associated with
 1,062 postal ZIPs that have no Census ZCTA-to-county relationship, most often
 institutional or unique-use ZIP codes.
+
+`public/data/county-medicaid-enrollment-2024.json` and its CSV companion contain
+county estimates from Census ACS table C27007. The map offers both estimated
+enrollment and the estimated share of the civilian noninstitutionalized
+population with Medicaid or other means-tested public coverage. These are 2024
+ACS 5-year estimates pooled across 2020–2024, not administrative enrollment or
+a point-in-time caseload. The artifact covers 3,222 county equivalents in all
+50 states, the District of Columbia, and Puerto Rico and retains 90% margins of
+error plus under-19, age 19–64, and age 65+ estimates.
+
+The “Medicaid paid per estimated enrollee” layer divides the 2024 HHS provider
+payments attributed to provider practice locations by the ACS county resident
+coverage estimate. Selecting a county shows the total paid amount, estimated
+covered residents, and calculated ratio together. Because provider location can
+differ from patient residence and the ACS denominator is a pooled survey
+estimate that includes other means-tested public coverage, this is an
+analytical comparison rather than an official CMS per-member cost.
+
+`public/data/county-h1b-fy2025.json` combines the four quarterly FY2025 DOL
+Labor Condition Application disclosure files with the full-year worksite file.
+It filters to H-1B cases and maps certified worksite placements to 2,545 county
+equivalents using reported county names and Census ZIP relationships. County
+profiles include certified applications and placements, annualized offered and
+prevailing wages, secondary-entity placements, and the leading employers and
+occupations. A certified LCA is a wage attestation—not a USCIS petition
+approval, confirmed hire, or count of unique people. The large source
+workbooks remain local and are excluded from Git; the compact artifact,
+converter, source notes, and validation report are versioned.
 
 The compact population artifact is reproducible from the official Census CSV:
 

@@ -16,6 +16,17 @@ export type CountyFeatureCollection = FeatureCollection<
   CountyProperties
 >;
 
+export type StateProperties = {
+  STATEFP: string;
+  STUSPS: string;
+  NAME: string;
+};
+
+export type StateFeatureCollection = FeatureCollection<
+  Polygon | MultiPolygon,
+  StateProperties
+>;
+
 export type Color = [number, number, number, number];
 
 export type CountyMetric = {

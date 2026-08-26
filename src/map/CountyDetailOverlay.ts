@@ -16,10 +16,19 @@ import {
   type CountyPppDataset,
 } from '../data/loadPpp';
 import {
+  formatH1bCurrency,
+  type CountyH1b,
+  type CountyH1bDataset,
+} from '../data/loadH1b';
+import {
   formatMedicaidCurrency,
   type CountyMedicaid,
   type CountyMedicaidDataset,
 } from '../data/loadMedicaid';
+import type {
+  CountyMedicaidEnrollment,
+  CountyMedicaidEnrollmentDataset,
+} from '../data/loadMedicaidEnrollment';
 import type {CountyFeature, CountyMetric, CountyProperties} from './types';
 
 export class CountyDetailOverlay {
@@ -62,7 +71,9 @@ export class CountyDetailOverlay {
     private readonly demographics: CountyDemographicsDataset,
     private readonly crime: CountyCrimeDataset,
     private readonly ppp: CountyPppDataset,
+    private readonly h1b: CountyH1bDataset,
     private readonly medicaid: CountyMedicaidDataset,
+    private readonly medicaidEnrollment: CountyMedicaidEnrollmentDataset,
     private readonly onRequestClose: () => void,
   ) {
     this.county = initialCounty;
@@ -339,6 +350,18 @@ export class CountyDetailOverlay {
       eyebrow = `${this.ppp.vintage} SBA`;
       title = 'PPP borrower profile';
       source = this.ppp.source;
+    } else if (this.isH1bMetric()) {
+      toggle = 'H-1B profile';
+      ariaLabel = 'County H-1B labor condition application profile';
+      eyebrow = `${this.h1b.vintage} DOL`;
+      title = 'H-1B worksite activity';
+      source = this.h1b.source;
+    } else if (this.isMedicaidEnrollmentMetric()) {
+      toggle = 'Coverage profile';
+      ariaLabel = 'County Medicaid coverage estimate';
+      eyebrow = `${this.medicaidEnrollment.vintage} ACS 5-year`;
+      title = 'Medicaid coverage estimate';
+      source = this.medicaidEnrollment.source;
     } else if (this.isMedicaidMetric()) {
       toggle = 'Medicaid profile';
       ariaLabel = 'County Medicaid spending profile';
@@ -363,6 +386,14 @@ export class CountyDetailOverlay {
       this.renderPppProfile();
       return;
     }
+    if (this.isH1bMetric()) {
+      this.renderH1bProfile();
+      return;
+    }
+    if (this.isMedicaidEnrollmentMetric()) {
+      this.renderMedicaidEnrollmentProfile();
+      return;
+    }
     if (this.isMedicaidMetric()) {
       this.renderMedicaidProfile();
       return;
@@ -381,16 +412,6 @@ export class CountyDetailOverlay {
       createDemographicGroup('Sex', demographics.total, [
         ['Female', demographics.female],
         ['Male', demographics.male],
-      ]),
-      createDemographicGroup('Age 65+ total', demographics.total, [
-        ['Residents age 65+', demographics.age65Plus],
-      ]),
-      createDemographicGroup('Age 65+ breakdown', demographics.age65Plus, [
-        ['65–69', demographics.age65To69],
-        ['70–74', demographics.age70To74],
-        ['75–79', demographics.age75To79],
-        ['80–84', demographics.age80To84],
-        ['85+', demographics.age85Plus],
       ]),
       createDemographicGroup(
         'Race & ethnicity',
@@ -480,12 +501,92 @@ export class CountyDetailOverlay {
     }
     const caveat = document.createElement('p');
     caveat.className = 'county-detail__profile-caveat';
-    caveat.textContent = this.medicaid.caveat;
-    const demographics = this.demographics.counties.get(
+    caveat.textContent =
+      `${this.medicaid.caveat} Paid per estimated enrollee divides these ` +
+      `provider-location payments by the ACS estimate of residents with ` +
+      `Medicaid or other means-tested public coverage. It is an analytical ` +
+      `comparison, not an official CMS per-member cost. The age breakdown ` +
+      `describes estimated enrollment, not spending by beneficiary age.`;
+    const enrollment = this.medicaidEnrollment.counties.get(
       this.county.properties.GEOID,
     );
+    const content: Node[] = [createMedicaidSummary(medicaid, enrollment)];
+    if (enrollment) {
+      content.push(
+        createDemographicGroup('Estimated enrollment by age', enrollment.enrolled, [
+          ['Under 19', enrollment.under19],
+          ['Age 19–64', enrollment.age19To64],
+          ['Age 65+', enrollment.age65Plus],
+        ]),
+      );
+    }
+    content.push(caveat);
+    this.demographicsContent.replaceChildren(...content);
+  }
+
+  private renderH1bProfile() {
+    const h1b = this.h1b.counties.get(this.county.properties.GEOID);
+    if (!h1b) {
+      const message = document.createElement('p');
+      message.className = 'county-detail__demographics-empty';
+      message.textContent =
+        'No FY2025 H-1B worksite activity was attributed to this county.';
+      this.demographicsContent.replaceChildren(message);
+      return;
+    }
+    const caveat = document.createElement('p');
+    caveat.className = 'county-detail__profile-caveat';
+    caveat.textContent = this.h1b.caveat;
+    const content: Node[] = [createH1bSummary(h1b)];
+    if (h1b.topEmployers.length) {
+      content.push(
+        createDemographicGroup(
+          'Top employers by certified placements',
+          h1b.certifiedWorkerPlacements,
+          h1b.topEmployers.map((item) => [
+            item.name ?? 'Unknown employer',
+            item.workerPlacements,
+          ]),
+        ),
+      );
+    }
+    if (h1b.topOccupations.length) {
+      content.push(
+        createDemographicGroup(
+          'Top occupations by certified placements',
+          h1b.certifiedWorkerPlacements,
+          h1b.topOccupations.map((item) => [
+            item.title ?? 'Unknown occupation',
+            item.workerPlacements,
+          ]),
+        ),
+      );
+    }
+    content.push(caveat);
+    this.demographicsContent.replaceChildren(...content);
+  }
+
+  private renderMedicaidEnrollmentProfile() {
+    const enrollment = this.medicaidEnrollment.counties.get(
+      this.county.properties.GEOID,
+    );
+    if (!enrollment) {
+      const message = document.createElement('p');
+      message.className = 'county-detail__demographics-empty';
+      message.textContent = 'No Medicaid coverage estimate is available.';
+      this.demographicsContent.replaceChildren(message);
+      return;
+    }
+    const caveat = document.createElement('p');
+    caveat.className = 'county-detail__profile-caveat';
+    caveat.textContent = this.medicaidEnrollment.caveat;
     this.demographicsContent.replaceChildren(
-      createMedicaidSummary(medicaid, demographics),
+      createMedicaidEnrollmentSummary(enrollment),
+      createDemographicGroup('Estimated enrollment by age', enrollment.enrolled, [
+        ['Under 19', enrollment.under19],
+        ['Age 19–64', enrollment.age19To64],
+        ['Age 65+', enrollment.age65Plus],
+      ]),
       caveat,
     );
   }
@@ -496,11 +597,104 @@ export class CountyDetailOverlay {
       this.metric.id.startsWith(`${this.medicaid.id}-`)
     );
   }
+
+  private isH1bMetric() {
+    return (
+      this.metric.id === this.h1b.id ||
+      this.metric.id.startsWith(`${this.h1b.id}-`)
+    );
+  }
+
+  private isMedicaidEnrollmentMetric() {
+    return (
+      this.metric.id === this.medicaidEnrollment.id ||
+      this.metric.id.startsWith(`${this.medicaidEnrollment.id}-`)
+    );
+  }
+}
+
+function createH1bSummary(h1b: CountyH1b) {
+  const section = document.createElement('section');
+  const heading = document.createElement('h4');
+  heading.textContent = 'Certified LCA worksite activity';
+  const list = document.createElement('dl');
+  list.className = 'county-detail__crime-summary';
+  const rows: Array<[string, string]> = [
+    ['Certified worker placements', formatCount(h1b.certifiedWorkerPlacements)],
+    ['Certified applications', formatCount(h1b.certifiedApplications)],
+    ['Applications, all statuses', formatCount(h1b.applications)],
+    ['Full-time placements', formatCount(h1b.fullTimeWorkerPlacements)],
+    [
+      'Secondary-entity placements',
+      formatCount(h1b.secondaryEntityWorkerPlacements),
+    ],
+    [
+      'Average offered annual wage',
+      h1b.averageOfferedAnnualWage == null
+        ? 'No data'
+        : formatH1bCurrency(h1b.averageOfferedAnnualWage),
+    ],
+    [
+      'Average prevailing annual wage',
+      h1b.averagePrevailingAnnualWage == null
+        ? 'No data'
+        : formatH1bCurrency(h1b.averagePrevailingAnnualWage),
+    ],
+    [
+      'Average offered-wage premium',
+      h1b.averageWagePremiumPercent == null
+        ? 'No data'
+        : formatPercentage(h1b.averageWagePremiumPercent),
+    ],
+  ];
+  for (const [label, value] of rows) {
+    const row = document.createElement('div');
+    const term = document.createElement('dt');
+    const detail = document.createElement('dd');
+    term.textContent = label;
+    detail.textContent = value;
+    row.append(term, detail);
+    list.append(row);
+  }
+  section.append(heading, list);
+  return section;
+}
+
+function createMedicaidEnrollmentSummary(
+  enrollment: CountyMedicaidEnrollment,
+) {
+  const section = document.createElement('section');
+  const heading = document.createElement('h4');
+  heading.textContent = 'Coverage estimate';
+  const list = document.createElement('dl');
+  list.className = 'county-detail__crime-summary';
+  const rows: Array<[string, string]> = [
+    ['Estimated covered', formatCount(enrollment.enrolled)],
+    ['90% margin of error', `±${formatCount(enrollment.enrolledMoe)}`],
+    [
+      'Coverage rate',
+      enrollment.enrollmentPercent == null
+        ? 'No data'
+        : formatPercentage(enrollment.enrollmentPercent),
+    ],
+    ['Survey population', formatCount(enrollment.population)],
+  ];
+  for (const [label, value] of rows) {
+    const row = document.createElement('div');
+    const term = document.createElement('dt');
+    const detail = document.createElement('dd');
+    term.textContent = label;
+    detail.textContent = value;
+    row.append(term, detail);
+    list.append(row);
+  }
+  section.append(heading, list);
+  return section;
 }
 
 function createMedicaidSummary(
   medicaid: CountyMedicaid,
-  demographics?: CountyDemographics,
+  enrollment?: CountyMedicaidEnrollment,
 ) {
   const section = document.createElement('section');
   const heading = document.createElement('h4');
@@ -518,14 +712,16 @@ function createMedicaidSummary(
     ['Published service cells', formatCount(medicaid.serviceCells)],
     ['Negative adjustment cells', formatCount(medicaid.adjustmentCells)],
   ];
-  if (demographics) {
+  if (enrollment) {
     rows.splice(
       1,
       0,
-      ['Resident population age 65+', formatCount(demographics.age65Plus)],
+      ['Estimated covered residents', formatCount(enrollment.enrolled)],
       [
-        'Paid per resident age 65+',
-        formatMedicaidCurrency(medicaid.paid / demographics.age65Plus),
+        'Paid per estimated enrollee',
+        enrollment.enrolled === 0
+          ? 'No data'
+          : formatMedicaidCurrency(medicaid.paid / enrollment.enrolled),
       ],
     );
   }

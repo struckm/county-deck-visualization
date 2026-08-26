@@ -1,0 +1,161 @@
+{
+  "sourceCases": {
+    "quarterFiles": [
+      "LCA_Disclosure_Data_FY2025_Q1.xlsx",
+      "LCA_Disclosure_Data_FY2025_Q2.xlsx",
+      "LCA_Disclosure_Data_FY2025_Q3.xlsx",
+      "LCA_Disclosure_Data_FY2025_Q4.xlsx"
+    ],
+    "h1bApplications": 580623,
+    "certifiedApplications": 537796,
+    "certifiedWorkerPositions": 873986,
+    "allWorkerPositions": 936667,
+    "finalStatusCounts": {
+      "CERTIFIED": 537796,
+      "CERTIFIED - WITHDRAWN": 30111,
+      "DENIED": 3505,
+      "WITHDRAWN": 9211
+    },
+    "quarterRowStatusCounts": {
+      "CERTIFIED": 539444,
+      "CERTIFIED - WITHDRAWN": 30111,
+      "DENIED": 3505,
+      "WITHDRAWN": 9211
+    }
+  },
+  "worksites": {
+    "certifiedWorkerPlacements": 1247184,
+    "certifiedWorksiteRows": 800922,
+    "h1bWorkerPlacements": 1332132,
+    "h1bWorksiteRows": 864192,
+    "mappedCertifiedWorkerPlacements": 1242597,
+    "mappedWorkerPlacements": 1327310,
+    "mappedWorksiteRows": 859999,
+    "unmatchedCertifiedWorkerPlacements": 4587,
+    "unmatchedWorkerPlacements": 4822,
+    "unmatchedWorksiteRows": 4193
+  },
+  "outputCountyCount": 2545,
+  "topUnmatchedLocations": [
+    {
+      "location": "CONNECTICUT|HARTFORD CITY|Hartford|06183",
+      "workerPlacements": 321
+    },
+    {
+      "location": "CONNECTICUT|HARTFORD CITY|Hartford|06156",
+      "workerPlacements": 274
+    },
+    {
+      "location": "CONNECTICUT|HARTFORD CITY|Hartford|06155",
+      "workerPlacements": 173
+    },
+    {
+      "location": "NORTH CAROLINA||Charlotte|28255",
+      "workerPlacements": 152
+    },
+    {
+      "location": "TEXAS||San Antonio|78288",
+      "workerPlacements": 115
+    },
+    {
+      "location": "CONNECTICUT||Hartford|06156",
+      "workerPlacements": 113
+    },
+    {
+      "location": "CONNECTICUT||Hartford|06102",
+      "workerPlacements": 109
+    },
+    {
+      "location": "MASSACHUSETTS|WORCESTER CITY|Worcester|01655",
+      "workerPlacements": 103
+    },
+    {
+      "location": "ARKANSAS||Bentonville|72716",
+      "workerPlacements": 83
+    },
+    {
+      "location": "TEXAS||Round Rock|78682",
+      "workerPlacements": 81
+    },
+    {
+      "location": "CONNECTICUT|HARTFORD CITY|Hartford|06102",
+      "workerPlacements": 77
+    },
+    {
+      "location": "OHIO||Cleveland|44195",
+      "workerPlacements": 62
+    },
+    {
+      "location": "NEW YORK||New York|10281",
+      "workerPlacements": 60
+    },
+    {
+      "location": "CONNECTICUT||Hartford|06183",
+      "workerPlacements": 56
+    },
+    {
+      "location": "INDIANA||Indianapolis|46285",
+      "workerPlacements": 48
+    },
+    {
+      "location": "NEW YORK||New York|10118",
+      "workerPlacements": 47
+    },
+    {
+      "location": "CONNECTICUT||Hartford|06155",
+      "workerPlacements": 44
+    },
+    {
+      "location": "ILLINOIS||Bloomington|61791",
+      "workerPlacements": 44
+    },
+    {
+      "location": "CONNECTICUT|FARMINGTON|Farmington|06030",
+      "workerPlacements": 42
+    },
+    {
+      "location": "NEW YORK||New York|10285",
+      "workerPlacements": 41
+    },
+    {
+      "location": "NEW HAMPSHIRE|LEBANON CITY|Lebanon|03756",
+      "workerPlacements": 41
+    },
+    {
+      "location": "CONNECTICUT|HARTFORD CITY|HARTFORD|06155",
+      "workerPlacements": 37
+    },
+    {
+      "location": "MISSOURI|ST LOUIS|St. Louis|63167",
+      "workerPlacements": 36
+    },
+    {
+      "location": "TEXAS||SAN ANTONIO|78288",
+      "workerPlacements": 35
+    },
+    {
+      "location": "CALIFORNIA||San Francisco|94143",
+      "workerPlacements": 34
+    },
+    {
+      "location": "ARIZONA||Tempe|85288",
+      "workerPlacements": 33
+    },
+    {
+      "location": "DISTRICT OF COLUMBIA||Washington|20433",
+      "workerPlacements": 32
+    },
+    {
+      "location": "WISCONSIN||Madison|53783",
+      "workerPlacements": 32
+    },
+    {
+      "location": "MISSOURI||Columbia|65211",
+      "workerPlacements": 32
+    },
+    {
+      "location": "IOWA||Cedar Rapids|52498",
+      "workerPlacements": 32
+    }
+  ]
+}

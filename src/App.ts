@@ -1,16 +1,19 @@
-import {loadCounties} from './data/loadCounties';
+import {loadCounties, loadStates} from './data/loadCounties';
 import {loadCountyMetric} from './data/loadMetric';
-import {
-  createOlderPopulationMetric,
-  loadCountyDemographics,
-} from './data/loadDemographics';
+import {loadCountyDemographics} from './data/loadDemographics';
 import {createCrimeMetric, loadCountyCrime} from './data/loadCrime';
 import {createPppMetric, loadCountyPpp} from './data/loadPpp';
+import {createH1bMetric, loadCountyH1b} from './data/loadH1b';
 import {
   createMedicaidMetric,
-  createMedicaidPerOlderResidentMetric,
+  createMedicaidPerEnrolleeMetric,
   loadCountyMedicaid,
 } from './data/loadMedicaid';
+import {
+  createMedicaidEnrollmentMetric,
+  createMedicaidEnrollmentPercentMetric,
+  loadCountyMedicaidEnrollment,
+} from './data/loadMedicaidEnrollment';
 import {createEthnicityOverlay} from './data/ethnicityOverlay';
 import {createCrimeRaceOverlay} from './data/crimeRaceOverlay';
 import {CountyChoropleth} from './map/CountyChoropleth';
@@ -101,9 +104,20 @@ export class CountyMapApp {
 
   async start() {
     try {
-      const [counties, population, demographics, crime, ppp, medicaid] =
+      const [
+        counties,
+        states,
+        population,
+        demographics,
+        crime,
+        ppp,
+        h1b,
+        medicaid,
+        medicaidEnrollment,
+      ] =
         await Promise.all([
           loadCounties(this.abortController.signal),
+          loadStates(this.abortController.signal),
           loadCountyMetric(
             '/data/county-population-2024.json',
             (value) => new Intl.NumberFormat('en-US').format(value),
@@ -112,15 +126,19 @@ export class CountyMapApp {
           loadCountyDemographics(this.abortController.signal),
           loadCountyCrime(this.abortController.signal),
           loadCountyPpp(this.abortController.signal),
+          loadCountyH1b(this.abortController.signal),
           loadCountyMedicaid(this.abortController.signal),
+          loadCountyMedicaidEnrollment(this.abortController.signal),
         ]);
       if (this.abortController.signal.aborted) return;
       this.metrics = [
         population,
-        createOlderPopulationMetric(demographics),
-        createMedicaidPerOlderResidentMetric(medicaid, demographics),
+        createMedicaidEnrollmentPercentMetric(medicaidEnrollment),
+        createMedicaidEnrollmentMetric(medicaidEnrollment),
+        createMedicaidPerEnrolleeMetric(medicaid, medicaidEnrollment),
         createMedicaidMetric(medicaid),
         createPppMetric(ppp),
+        createH1bMetric(h1b),
         createCrimeMetric(crime),
       ];
       this.categoryOverlays = [
@@ -140,6 +158,7 @@ export class CountyMapApp {
       this.choropleth = new CountyChoropleth(
         map,
         counties,
+        states,
         initialMetric,
         (county) => this.selectCounty(county),
         () => this.status.remove(),
@@ -151,7 +170,9 @@ export class CountyMapApp {
         demographics,
         crime,
         ppp,
+        h1b,
         medicaid,
+        medicaidEnrollment,
         () => this.clearSelection(),
       );
     } catch (error) {

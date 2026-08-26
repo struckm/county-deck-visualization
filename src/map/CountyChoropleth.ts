@@ -14,6 +14,8 @@ import type {
   CountyFeatureCollection,
   CountyMetric,
   CountyProperties,
+  StateFeatureCollection,
+  StateProperties,
 } from './types';
 
 const US_VIEW_STATE: MapViewState = {
@@ -31,6 +33,7 @@ export class CountyChoropleth {
   private readonly countiesByGeoid: Map<string, CountyFeature>;
   private readonly resizeObserver: ResizeObserver;
   private mainLayer: GeoJsonLayer<CountyProperties>;
+  private readonly stateLayer: GeoJsonLayer<StateProperties>;
   private selectionLayer: GeoJsonLayer<CountyProperties>;
   private legend: HTMLDivElement;
   private categoryOverlay: CountyCategoryOverlay | null = null;
@@ -101,6 +104,7 @@ export class CountyChoropleth {
   constructor(
     private readonly container: HTMLDivElement,
     private readonly counties: CountyFeatureCollection,
+    states: StateFeatureCollection,
     private metric: CountyMetric,
     private readonly onSelect: (county: CountyFeature) => void,
     private readonly onReady: () => void = () => {},
@@ -110,13 +114,14 @@ export class CountyChoropleth {
       counties.features.map((county) => [county.properties.GEOID, county]),
     );
     this.mainLayer = this.createMainLayer(scale);
+    this.stateLayer = createStateLayer(states);
     this.selectionLayer = this.createSelectionLayer();
 
     this.deck = new Deck({
       parent: container,
       initialViewState: responsiveViewState(container.clientWidth),
       controller: {dragRotate: false, touchRotate: false},
-      layers: [this.mainLayer, this.selectionLayer],
+      layers: [this.mainLayer, this.stateLayer, this.selectionLayer],
       getCursor: ({isDragging, isHovering}) =>
         isDragging ? 'grabbing' : isHovering ? 'pointer' : 'grab',
       onAfterRender: this.handleAfterRender,
@@ -149,7 +154,9 @@ export class CountyChoropleth {
     this.selectionLayer = this.createSelectionLayer(
       geoid ? this.countiesByGeoid.get(geoid) : undefined,
     );
-    this.deck.setProps({layers: [this.mainLayer, this.selectionLayer]});
+    this.deck.setProps({
+      layers: [this.mainLayer, this.stateLayer, this.selectionLayer],
+    });
   }
 
   setMetric(metric: CountyMetric) {
@@ -233,7 +240,9 @@ export class CountyChoropleth {
       : createLegend(this.metric, scale);
     this.legend.replaceWith(legend);
     this.legend = legend;
-    this.deck.setProps({layers: [this.mainLayer, this.selectionLayer]});
+    this.deck.setProps({
+      layers: [this.mainLayer, this.stateLayer, this.selectionLayer],
+    });
   }
 
   private getTooltipText(county: CountyFeature) {
@@ -251,6 +260,20 @@ export class CountyChoropleth {
           'No data';
     return `${countyName}\nLargest group: ${label}`;
   }
+}
+
+function createStateLayer(states: StateFeatureCollection) {
+  return new GeoJsonLayer<StateProperties>({
+    id: 'state-boundaries',
+    data: states,
+    filled: false,
+    stroked: true,
+    pickable: false,
+    getLineColor: [15, 35, 43, 235],
+    getLineWidth: 1.35,
+    lineWidthUnits: 'pixels',
+    lineWidthMinPixels: 1,
+  });
 }
 
 function markPopupInput() {

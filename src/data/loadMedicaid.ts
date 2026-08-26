@@ -1,5 +1,6 @@
 import type {CountyMetric} from '../map/types';
 import type {CountyDemographicsDataset} from './loadDemographics';
+import type {CountyMedicaidEnrollmentDataset} from './loadMedicaidEnrollment';
 
 export type CountyMedicaid = {
   providers: number;
@@ -70,6 +71,31 @@ export function createMedicaidPerOlderResidentMetric(
     label: 'Medicaid paid per resident age 65+',
     description:
       'All Medicaid and CHIP provider payments attributed to county provider location, divided by the county resident population age 65+; this is a screening indicator, not spending on older beneficiaries',
+    vintage: medicaid.vintage,
+    source: medicaid.source,
+    scale: 'quantile',
+    values,
+    formatValue: formatMedicaidCurrency,
+  };
+}
+
+export function createMedicaidPerEnrolleeMetric(
+  medicaid: CountyMedicaidDataset,
+  enrollment: CountyMedicaidEnrollmentDataset,
+): CountyMetric {
+  const values = new Map<string, number | null>();
+  for (const [geoid, county] of medicaid.counties) {
+    const enrolled = enrollment.counties.get(geoid)?.enrolled;
+    values.set(
+      geoid,
+      enrolled == null || enrolled === 0 ? null : county.paid / enrolled,
+    );
+  }
+  return {
+    id: `${medicaid.id}-per-estimated-enrollee`,
+    label: 'Medicaid paid per estimated enrollee',
+    description:
+      '2024 Medicaid and CHIP provider payments attributed to county provider location, divided by the 2024 ACS 5-year estimate of county residents with Medicaid or other means-tested public coverage; this is an analytical estimate, not an official per-member cost',
     vintage: medicaid.vintage,
     source: medicaid.source,
     scale: 'quantile',
