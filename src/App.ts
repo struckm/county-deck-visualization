@@ -250,6 +250,9 @@ export class CountyMapApp {
   }
 
   private selectCounty(county: CountyFeature) {
+    if (this.selectedCounty?.properties.GEOID === county.properties.GEOID) {
+      return;
+    }
     this.selectedCounty = county;
     this.detailOverlay?.open(county);
     this.renderFooter(county);
