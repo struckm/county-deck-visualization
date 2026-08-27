@@ -15,15 +15,10 @@ Back and Forward move through previous dropdown choices.
 
 ## Google Analytics
 
-Set `VITE_GA_MEASUREMENT_ID` to a GA4 web-stream Measurement ID during the
-production build. The app only loads Google's `gtag.js` when the value is a
-valid `G-...` identifier. Dropdown changes and browser Back/Forward navigation
-are recorded as virtual page views because they update the URL without a full
-page reload.
-
-```bash
-VITE_GA_MEASUREMENT_ID=G-XXXXXXXXXX npm run build
-```
+The production page installs Google's standard `gtag.js` snippet for GA4 web
+stream `G-7S4TK8S2RS`. Dropdown changes and browser Back/Forward navigation are
+recorded as virtual page views because they update the URL without a full page
+reload.
 
 Click a county to open a focused detail overlay. The overlay fits the selected
 geometry into its own independently interactive Deck.gl view and exposes the

@@ -1,16 +1,14 @@
+import {readFileSync} from 'node:fs';
 import {describe, expect, it} from 'vitest';
-import {isGoogleAnalyticsMeasurementId} from './analytics';
 
-describe('Google Analytics configuration', () => {
-  it('accepts GA4 measurement IDs', () => {
-    expect(isGoogleAnalyticsMeasurementId('G-PSW1MY7HB4')).toBe(true);
-    expect(isGoogleAnalyticsMeasurementId(' g-abc123 ')).toBe(true);
-  });
+describe('Google Analytics tag', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
-  it('rejects missing and non-GA4 identifiers', () => {
-    expect(isGoogleAnalyticsMeasurementId(undefined)).toBe(false);
-    expect(isGoogleAnalyticsMeasurementId('')).toBe(false);
-    expect(isGoogleAnalyticsMeasurementId('UA-12345-6')).toBe(false);
-    expect(isGoogleAnalyticsMeasurementId('G-ABC_123')).toBe(false);
+  it('uses the configured GA4 measurement ID in the standard Google tag', () => {
+    expect(html).toContain(
+      'https://www.googletagmanager.com/gtag/js?id=G-7S4TK8S2RS',
+    );
+    expect(html).toContain("gtag('config', 'G-7S4TK8S2RS')");
+    expect(html).toContain('function gtag(){dataLayer.push(arguments);}');
   });
 });
