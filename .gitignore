@@ -4,6 +4,9 @@ dist/
 .DS_Store
 __pycache__/
 *.py[cod]
+.env
+.env.local
+.env.*.local
 outputs/
 data/medicaid-state-enrollment-2025/
 data/h1b-dol-lca-fy2025/*.xlsx

@@ -13,6 +13,18 @@ Every metric and categorical overlay has a shareable deep link using the
 to `?metric=<metric-id>`. Loading that URL restores the selection, and browser
 Back and Forward move through previous dropdown choices.
 
+## Google Analytics
+
+Set `VITE_GA_MEASUREMENT_ID` to a GA4 web-stream Measurement ID during the
+production build. The app only loads Google's `gtag.js` when the value is a
+valid `G-...` identifier. Dropdown changes and browser Back/Forward navigation
+are recorded as virtual page views because they update the URL without a full
+page reload.
+
+```bash
+VITE_GA_MEASUREMENT_ID=G-XXXXXXXXXX npm run build
+```
+
 Click a county to open a focused detail overlay. The overlay fits the selected
 geometry into its own independently interactive Deck.gl view and exposes the
 county metric, water area, GEOID, and state. Close it with the × button, the

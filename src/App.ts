@@ -18,6 +18,7 @@ import {createEthnicityOverlay} from './data/ethnicityOverlay';
 import {createCrimeRaceOverlay} from './data/crimeRaceOverlay';
 import {CountyChoropleth} from './map/CountyChoropleth';
 import {CountyDetailOverlay} from './map/CountyDetailOverlay';
+import {trackGoogleAnalyticsPageView} from './analytics';
 import {createMetricUrl, readMetricId} from './urlState';
 import type {
   CountyCategoryOverlay,
@@ -282,10 +283,12 @@ export class CountyMapApp {
   private applySelectionFromUrl() {
     if (this.metrics.length === 0) return;
     const selectionId = readMetricId(window.location.href);
-    if (selectionId && this.applySelection(selectionId)) return;
-    const defaultMetric = this.metrics[0];
-    this.applyMetric(defaultMetric);
-    this.replaceMetricUrl(defaultMetric.id);
+    if (!selectionId || !this.applySelection(selectionId)) {
+      const defaultMetric = this.metrics[0];
+      this.applyMetric(defaultMetric);
+      this.replaceMetricUrl(defaultMetric.id);
+    }
+    trackGoogleAnalyticsPageView();
   }
 
   private pushMetricUrl(metricId: string) {
@@ -295,6 +298,7 @@ export class CountyMapApp {
       '',
       createMetricUrl(window.location.href, metricId),
     );
+    trackGoogleAnalyticsPageView();
   }
 
   private replaceMetricUrl(metricId: string) {

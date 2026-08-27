@@ -1,5 +1,8 @@
 import {CountyMapApp} from './App';
+import {initializeGoogleAnalytics} from './analytics';
 import './styles.css';
+
+initializeGoogleAnalytics();
 
 const root = document.getElementById('root');
 if (!(root instanceof HTMLDivElement)) {
