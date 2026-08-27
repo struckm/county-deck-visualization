@@ -1,0 +1,23 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "county-analytics-collector",
+  "main": "./workers/analytics-collector/index.ts",
+  "compatibility_date": "2026-08-27",
+  "workers_dev": false,
+  "preview_urls": false,
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "GA_PROPERTY_ID": "327638989"
+  },
+  "services": [
+    {
+      "binding": "REPORT_GENERATOR",
+      "service": "county-analytics-report-generator"
+    }
+  ],
+  "triggers": {
+    "crons": ["0 13 * * *"]
+  }
+}

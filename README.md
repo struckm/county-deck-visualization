@@ -226,3 +226,33 @@ Future election and HHS inputs should be normalized to the same metric
 file shape: metadata plus one numeric value per five-digit county GEOID. Raw
 records must be aggregated to county level before entering the browser bundle;
 the map should not contain source-specific joins or aggregation logic.
+# Daily analytics Workers
+
+The GA4 email report is implemented as three private Cloudflare Workers:
+
+1. `county-analytics-collector` runs daily at `13:00 UTC`, queries the previous
+   `America/Chicago` calendar day from GA4, and calls the report generator.
+2. `county-analytics-report-generator` formats the analytics sections as HTML
+   and plain text, then calls the email sender.
+3. `county-analytics-email-sender` sends the report from
+   `analytics@reports.markstruck.com` to `markstruck@comcast.net` through
+   Resend's API.
+
+The two downstream Workers have no public URL. They are reachable only through
+Cloudflare service bindings. Deploy them in dependency order with:
+
+```sh
+npm run deploy:analytics
+```
+
+Before deployment:
+
+- Enable the Google Analytics Data API in a Google Cloud project.
+- Create a service account, give its email Viewer access to GA4 property
+  `327638989`, and add `GA_CLIENT_EMAIL` and `GA_PRIVATE_KEY` as secrets on the
+  collector Worker.
+- Register the GA4 event-scoped custom dimensions used in the report:
+  `county_name`, `state_code`, `county_geoid`, `metric_id`, `metric_label`, and
+  `contact_method`.
+- Verify `reports.markstruck.com` as a sending domain in Resend and add its API
+  key as the `RESEND_API_KEY` secret on the email sender Worker.

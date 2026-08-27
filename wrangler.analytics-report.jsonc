@@ -1,0 +1,18 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "county-analytics-report-generator",
+  "main": "./workers/report-generator/index.ts",
+  "compatibility_date": "2026-08-27",
+  "workers_dev": false,
+  "preview_urls": false,
+  "observability": {
+    "enabled": true
+  },
+  "services": [
+    {
+      "binding": "EMAIL_SENDER",
+      "service": "county-analytics-email-sender"
+    }
+  ]
+}
+

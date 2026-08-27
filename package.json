@@ -6,6 +6,11 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "check:workers": "wrangler deploy --dry-run -c wrangler.analytics-email.jsonc && wrangler deploy --dry-run -c wrangler.analytics-report.jsonc && wrangler deploy --dry-run -c wrangler.analytics-collector.jsonc",
+    "deploy:analytics:email": "wrangler deploy -c wrangler.analytics-email.jsonc",
+    "deploy:analytics:report": "wrangler deploy -c wrangler.analytics-report.jsonc",
+    "deploy:analytics:collector": "wrangler deploy -c wrangler.analytics-collector.jsonc",
+    "deploy:analytics": "npm run deploy:analytics:email && npm run deploy:analytics:report && npm run deploy:analytics:collector",
     "build:data:medicaid-enrollment": "node scripts/build-county-medicaid-enrollment.mjs public/data/us-counties-2023.geojson public/data/county-medicaid-enrollment-2024.json public/data/county-medicaid-enrollment-2024.csv 2024",
     "test": "vitest run",
     "preview": "vite preview"
