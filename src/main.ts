@@ -8,4 +8,6 @@ if (!(root instanceof HTMLDivElement)) {
 
 const app = new CountyMapApp(root);
 void app.start();
-window.addEventListener('beforeunload', () => app.destroy(), {once: true});
+window.addEventListener('pagehide', (event) => {
+  if (!event.persisted) app.destroy();
+});
