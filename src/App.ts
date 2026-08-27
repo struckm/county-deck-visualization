@@ -18,6 +18,7 @@ import {createEthnicityOverlay} from './data/ethnicityOverlay';
 import {createCrimeRaceOverlay} from './data/crimeRaceOverlay';
 import {CountyChoropleth} from './map/CountyChoropleth';
 import {CountyDetailOverlay} from './map/CountyDetailOverlay';
+import {createMetricUrl, readMetricId} from './urlState';
 import type {
   CountyCategoryOverlay,
   CountyFeature,
@@ -87,18 +88,15 @@ export class CountyMapApp {
       HTMLAnchorElement,
     );
     this.metricSelect.addEventListener('change', () => {
-      const overlay = this.categoryOverlays.find(
-        (candidate) => candidate.id === this.metricSelect.value,
-      );
-      if (overlay) {
-        this.applyCategoryOverlay(overlay);
-        return;
+      if (this.applySelection(this.metricSelect.value)) {
+        this.pushMetricUrl(this.metricSelect.value);
       }
-      const metric = this.metrics.find(
-        (candidate) => candidate.id === this.metricSelect.value,
-      );
-      if (metric) this.applyMetric(metric);
     });
+    window.addEventListener(
+      'popstate',
+      () => this.applySelectionFromUrl(),
+      {signal: this.abortController.signal},
+    );
     this.renderFooter(null);
   }
 
@@ -146,8 +144,18 @@ export class CountyMapApp {
         createCrimeRaceOverlay(crime),
       ];
       this.populateMetricSelect();
-      const initialMetric = this.metrics[0];
+      const defaultMetric = this.metrics[0];
+      const requestedMetricId = readMetricId(window.location.href);
+      const requestedMetricExists =
+        requestedMetricId != null &&
+        (this.metrics.some(({id}) => id === requestedMetricId) ||
+          this.categoryOverlays.some(({id}) => id === requestedMetricId));
+      const initialMetricId = requestedMetricExists
+        ? requestedMetricId
+        : defaultMetric.id;
+      const initialMetric = defaultMetric;
       this.applyMetric(initialMetric);
+      this.replaceMetricUrl(initialMetricId);
 
       const map = document.createElement('div');
       map.className = 'map map--loading';
@@ -175,6 +183,7 @@ export class CountyMapApp {
         medicaidEnrollment,
         () => this.clearSelection(),
       );
+      this.applySelection(initialMetricId);
     } catch (error) {
       if (this.abortController.signal.aborted) return;
       this.status.classList.add('map-status--error');
@@ -252,6 +261,49 @@ export class CountyMapApp {
       ),
     );
     this.metricSelect.disabled = false;
+  }
+
+  private applySelection(selectionId: string) {
+    const overlay = this.categoryOverlays.find(
+      (candidate) => candidate.id === selectionId,
+    );
+    if (overlay) {
+      this.applyCategoryOverlay(overlay);
+      return true;
+    }
+    const metric = this.metrics.find((candidate) => candidate.id === selectionId);
+    if (metric) {
+      this.applyMetric(metric);
+      return true;
+    }
+    return false;
+  }
+
+  private applySelectionFromUrl() {
+    if (this.metrics.length === 0) return;
+    const selectionId = readMetricId(window.location.href);
+    if (selectionId && this.applySelection(selectionId)) return;
+    const defaultMetric = this.metrics[0];
+    this.applyMetric(defaultMetric);
+    this.replaceMetricUrl(defaultMetric.id);
+  }
+
+  private pushMetricUrl(metricId: string) {
+    if (readMetricId(window.location.href) === metricId) return;
+    window.history.pushState(
+      null,
+      '',
+      createMetricUrl(window.location.href, metricId),
+    );
+  }
+
+  private replaceMetricUrl(metricId: string) {
+    if (readMetricId(window.location.href) === metricId) return;
+    window.history.replaceState(
+      null,
+      '',
+      createMetricUrl(window.location.href, metricId),
+    );
   }
 
   private applyMetric(metric: CountyMetric) {

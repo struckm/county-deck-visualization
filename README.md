@@ -8,6 +8,11 @@ race/ethnicity views.
 The application uses direct DOM updates and persistent `Deck` instances; it has
 no UI framework or component runtime.
 
+Every metric and categorical overlay has a shareable deep link using the
+`metric` query parameter. For example, selecting the H-1B layer updates the URL
+to `?metric=<metric-id>`. Loading that URL restores the selection, and browser
+Back and Forward move through previous dropdown choices.
+
 Click a county to open a focused detail overlay. The overlay fits the selected
 geometry into its own independently interactive Deck.gl view and exposes the
 county metric, water area, GEOID, and state. Close it with the × button, the

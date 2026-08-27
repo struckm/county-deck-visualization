@@ -2,6 +2,8 @@ node_modules/
 dist/
 *.tsbuildinfo
 .DS_Store
+__pycache__/
+*.py[cod]
 outputs/
 data/medicaid-state-enrollment-2025/
 data/h1b-dol-lca-fy2025/*.xlsx
