@@ -500,6 +500,7 @@ h2 { margin: 4px 0 0; font-size: clamp(1.2rem, 2.4vw, 1.8rem); line-height: 1.1;
 .detail-bar {
   min-height: 54px;
   display: flex;
+  flex: 1 1 auto;
   align-items: center;
   gap: clamp(24px, 5vw, 72px);
   color: #829ca1;
@@ -519,13 +520,77 @@ h2 { margin: 4px 0 0; font-size: clamp(1.2rem, 2.4vw, 1.8rem); line-height: 1.1;
 }
 .detail-bar button:hover { border-color: rgba(239, 183, 74, 0.55); color: #f0c97e; }
 
+.site-footer {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.contact-links {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.contact-links a {
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
+  color: #78949a;
+  display: grid;
+  place-items: center;
+  text-decoration: none;
+  transition: color 120ms ease, background-color 120ms ease;
+}
+
+.contact-links svg {
+  width: 17px;
+  height: 17px;
+  fill: currentColor;
+}
+
+.contact-links a[href^="mailto:"] svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.contact-links a:hover {
+  color: #f0c97e;
+  background: rgba(239, 183, 74, 0.08);
+}
+
+.contact-links a:focus-visible {
+  color: #f0c97e;
+  outline: 1px solid rgba(239, 183, 74, 0.65);
+  outline-offset: 2px;
+}
+
 @media (max-width: 720px) {
   .app-shell { grid-template-rows: auto 480px auto; padding-top: 20px; }
   .app-header { align-items: stretch; flex-direction: column; gap: 14px; }
   .metric-control { width: 100%; }
   .source-note { display: none; }
+  .site-footer { align-items: flex-end; flex-wrap: wrap; gap: 2px 16px; }
   .detail-bar { flex-wrap: wrap; gap: 14px 28px; }
   .detail-bar button { margin-left: 0; }
+  .contact-links { width: 100%; }
   .county-detail-scrim { padding: 8px; }
   .county-detail { height: calc(100% - 4px); min-height: 0; grid-template-rows: auto minmax(180px, 1fr) auto; }
   .county-detail__header { padding: 14px 15px 12px; }
@@ -539,5 +604,6 @@ h2 { margin: 4px 0 0; font-size: clamp(1.2rem, 2.4vw, 1.8rem); line-height: 1.1;
   .county-detail-scrim::before,
   .county-detail,
   .county-detail__map canvas,
-  .county-detail__demographics { transition: none; }
+  .county-detail__demographics,
+  .contact-links a { transition: none; }
 }
