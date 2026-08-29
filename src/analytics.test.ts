@@ -17,7 +17,9 @@ describe('Google Analytics tag', () => {
       'https://www.googletagmanager.com/gtag/js?id=G-7S4TK8S2RS',
     );
     expect(html).toContain("gtag('config', 'G-7S4TK8S2RS')");
-    expect(html).toContain('function gtag(){dataLayer.push(arguments);}');
+    expect(html).toMatch(
+      /function\s+gtag\(\)\s*{\s*dataLayer\.push\(arguments\);\s*}/,
+    );
   });
 });
 

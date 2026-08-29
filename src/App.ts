@@ -26,8 +26,15 @@ import {createMetricUrl, readMetricId} from './urlState';
 import type {
   CountyCategoryOverlay,
   CountyFeature,
+  CountyFeatureCollection,
   CountyMetric,
 } from './map/types';
+
+type InitialSelection = {
+  metric: CountyMetric;
+  overlay?: CountyCategoryOverlay;
+  selectionId: string;
+};
 
 export class CountyMapApp {
   private readonly abortController = new AbortController();
@@ -45,6 +52,18 @@ export class CountyMapApp {
   private metrics: CountyMetric[] = [];
   private categoryOverlays: CountyCategoryOverlay[] = [];
   private selectedCounty: CountyFeature | null = null;
+  private backgroundLoadTimer = 0;
+  private backgroundLoadStarted = false;
+  private populationPromise: Promise<CountyMetric> | null = null;
+  private demographicsPromise: ReturnType<typeof loadCountyDemographics> | null =
+    null;
+  private crimePromise: ReturnType<typeof loadCountyCrime> | null = null;
+  private pppPromise: ReturnType<typeof loadCountyPpp> | null = null;
+  private h1bPromise: ReturnType<typeof loadCountyH1b> | null = null;
+  private medicaidPromise: ReturnType<typeof loadCountyMedicaid> | null = null;
+  private medicaidEnrollmentPromise: ReturnType<
+    typeof loadCountyMedicaidEnrollment
+  > | null = null;
 
   constructor(private readonly root: HTMLDivElement) {
     root.innerHTML = `
@@ -149,9 +168,83 @@ export class CountyMapApp {
 
   async start() {
     try {
-      const [
+      const requestedMetricId = readMetricId(window.location.href);
+      const [counties, states, initialSelection] = await Promise.all([
+        loadCounties(this.abortController.signal),
+        loadStates(this.abortController.signal),
+        this.loadInitialSelection(requestedMetricId),
+      ]);
+      if (this.abortController.signal.aborted) return;
+      this.metrics = [initialSelection.metric];
+      this.categoryOverlays = initialSelection.overlay
+        ? [initialSelection.overlay]
+        : [];
+      this.populateMetricSelect();
+      const initialMetric = initialSelection.metric;
+      this.applyMetric(initialMetric);
+      if (requestedMetricId !== initialSelection.selectionId) {
+        this.replaceMetricUrl(initialSelection.selectionId);
+      }
+
+      const map = document.createElement('div');
+      map.className = 'map map--loading';
+      map.setAttribute('aria-label', `${initialMetric.label} by U.S. county`);
+      this.mapCard.append(map);
+      this.mapElement = map;
+
+      this.choropleth = new CountyChoropleth(
+        map,
         counties,
         states,
+        initialMetric,
+        (county) => this.selectCounty(county),
+        () => {
+          this.status.remove();
+          this.scheduleBackgroundDataLoad(counties);
+        },
+      );
+      if (initialSelection.overlay) {
+        this.applyCategoryOverlay(initialSelection.overlay);
+      }
+    } catch (error) {
+      if (this.abortController.signal.aborted) return;
+      this.status.classList.add('map-status--error');
+      this.status.setAttribute('role', 'alert');
+      this.status.replaceChildren(
+        document.createTextNode(
+          `Could not load map data: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        ),
+      );
+    }
+  }
+
+  destroy() {
+    window.clearTimeout(this.backgroundLoadTimer);
+    this.abortController.abort();
+    this.choropleth?.destroy();
+    this.detailOverlay?.destroy();
+  }
+
+  private scheduleBackgroundDataLoad(
+    counties: CountyFeatureCollection,
+  ) {
+    if (this.backgroundLoadStarted) return;
+    this.backgroundLoadStarted = true;
+    this.backgroundLoadTimer = window.setTimeout(() => {
+      const load = () => void this.loadBackgroundData(counties);
+      if ('requestIdleCallback' in window) {
+        window.requestIdleCallback(load, {timeout: 3_000});
+      } else {
+        load();
+      }
+    }, 1_500);
+  }
+
+  private async loadBackgroundData(
+    counties: CountyFeatureCollection,
+  ) {
+    try {
+      const [
         population,
         demographics,
         crime,
@@ -159,23 +252,17 @@ export class CountyMapApp {
         h1b,
         medicaid,
         medicaidEnrollment,
-      ] =
-        await Promise.all([
-          loadCounties(this.abortController.signal),
-          loadStates(this.abortController.signal),
-          loadCountyMetric(
-            '/data/county-population-2024.json',
-            (value) => new Intl.NumberFormat('en-US').format(value),
-            this.abortController.signal,
-          ),
-          loadCountyDemographics(this.abortController.signal),
-          loadCountyCrime(this.abortController.signal),
-          loadCountyPpp(this.abortController.signal),
-          loadCountyH1b(this.abortController.signal),
-          loadCountyMedicaid(this.abortController.signal),
-          loadCountyMedicaidEnrollment(this.abortController.signal),
-        ]);
+      ] = await Promise.all([
+        this.loadPopulation(),
+        this.loadDemographics(),
+        this.loadCrime(),
+        this.loadPpp(),
+        this.loadH1b(),
+        this.loadMedicaid(),
+        this.loadMedicaidEnrollment(),
+      ]);
       if (this.abortController.signal.aborted) return;
+
       this.metrics = [
         population,
         createMedicaidEnrollmentPercentMetric(medicaidEnrollment),
@@ -190,38 +277,12 @@ export class CountyMapApp {
         createEthnicityOverlay(demographics),
         createCrimeRaceOverlay(crime),
       ];
+      const activeSelectionId = this.metricSelect.value;
       this.populateMetricSelect();
-      const defaultMetric = this.metrics[0];
-      const requestedMetricId = readMetricId(window.location.href);
-      const requestedMetricExists =
-        requestedMetricId != null &&
-        (this.metrics.some(({id}) => id === requestedMetricId) ||
-          this.categoryOverlays.some(({id}) => id === requestedMetricId));
-      const initialMetricId = requestedMetricExists
-        ? requestedMetricId
-        : defaultMetric.id;
-      const initialMetric = defaultMetric;
-      this.applyMetric(initialMetric);
-      this.replaceMetricUrl(initialMetricId);
-
-      const map = document.createElement('div');
-      map.className = 'map map--loading';
-      map.setAttribute('aria-label', `${initialMetric.label} by U.S. county`);
-      this.mapCard.append(map);
-      this.mapElement = map;
-
-      this.choropleth = new CountyChoropleth(
-        map,
-        counties,
-        states,
-        initialMetric,
-        (county) => this.selectCounty(county),
-        () => this.status.remove(),
-      );
       this.detailOverlay = new CountyDetailOverlay(
         this.mapCard,
         counties.features[0],
-        initialMetric,
+        this.metric ?? this.metrics[0],
         demographics,
         crime,
         ppp,
@@ -230,23 +291,124 @@ export class CountyMapApp {
         medicaidEnrollment,
         () => this.clearSelection(),
       );
-      this.applySelection(initialMetricId);
+
+      this.applySelection(activeSelectionId);
+      if (this.selectedCounty) this.detailOverlay.open(this.selectedCounty);
     } catch (error) {
-      if (this.abortController.signal.aborted) return;
-      this.status.classList.add('map-status--error');
-      this.status.setAttribute('role', 'alert');
-      this.status.replaceChildren(
-        document.createTextNode(
-          `Could not load map data: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        ),
-      );
+      if (!this.abortController.signal.aborted) {
+        console.error('Could not load background county data', error);
+      }
     }
   }
 
-  destroy() {
-    this.abortController.abort();
-    this.choropleth?.destroy();
-    this.detailOverlay?.destroy();
+  private async loadInitialSelection(
+    requestedMetricId: string | null,
+  ): Promise<InitialSelection> {
+    switch (requestedMetricId) {
+      case 'ppp-approved-amount': {
+        const metric = createPppMetric(await this.loadPpp());
+        return {metric, selectionId: metric.id};
+      }
+      case 'h1b-certified-worker-placements': {
+        const metric = createH1bMetric(await this.loadH1b());
+        return {metric, selectionId: metric.id};
+      }
+      case 'crime-offenses-2025': {
+        const metric = createCrimeMetric(await this.loadCrime());
+        return {metric, selectionId: metric.id};
+      }
+      case 'crime-known-offender-race-majority': {
+        const crime = await this.loadCrime();
+        const metric = createCrimeMetric(crime);
+        return {
+          metric,
+          overlay: createCrimeRaceOverlay(crime),
+          selectionId: requestedMetricId,
+        };
+      }
+      case 'medicaid-paid-amount': {
+        const metric = createMedicaidMetric(await this.loadMedicaid());
+        return {metric, selectionId: metric.id};
+      }
+      case 'medicaid-enrollment-estimate': {
+        const metric = createMedicaidEnrollmentMetric(
+          await this.loadMedicaidEnrollment(),
+        );
+        return {metric, selectionId: metric.id};
+      }
+      case 'medicaid-enrollment-estimate-percent': {
+        const metric = createMedicaidEnrollmentPercentMetric(
+          await this.loadMedicaidEnrollment(),
+        );
+        return {metric, selectionId: metric.id};
+      }
+      case 'medicaid-paid-amount-per-estimated-enrollee': {
+        const [medicaid, enrollment] = await Promise.all([
+          this.loadMedicaid(),
+          this.loadMedicaidEnrollment(),
+        ]);
+        const metric = createMedicaidPerEnrolleeMetric(medicaid, enrollment);
+        return {metric, selectionId: metric.id};
+      }
+      case 'race-ethnicity-majority': {
+        const [population, demographics] = await Promise.all([
+          this.loadPopulation(),
+          this.loadDemographics(),
+        ]);
+        return {
+          metric: population,
+          overlay: createEthnicityOverlay(demographics),
+          selectionId: requestedMetricId,
+        };
+      }
+      default: {
+        const metric = await this.loadPopulation();
+        return {metric, selectionId: metric.id};
+      }
+    }
+  }
+
+  private loadPopulation() {
+    this.populationPromise ??= loadCountyMetric(
+      '/data/county-population-2024.json',
+      (value) => new Intl.NumberFormat('en-US').format(value),
+      this.abortController.signal,
+    );
+    return this.populationPromise;
+  }
+
+  private loadDemographics() {
+    this.demographicsPromise ??= loadCountyDemographics(
+      this.abortController.signal,
+    );
+    return this.demographicsPromise;
+  }
+
+  private loadCrime() {
+    this.crimePromise ??= loadCountyCrime(this.abortController.signal);
+    return this.crimePromise;
+  }
+
+  private loadPpp() {
+    this.pppPromise ??= loadCountyPpp(this.abortController.signal);
+    return this.pppPromise;
+  }
+
+  private loadH1b() {
+    this.h1bPromise ??= loadCountyH1b(this.abortController.signal);
+    return this.h1bPromise;
+  }
+
+  private loadMedicaid() {
+    this.medicaidPromise ??= loadCountyMedicaid(this.abortController.signal);
+    return this.medicaidPromise;
+  }
+
+  private loadMedicaidEnrollment() {
+    this.medicaidEnrollmentPromise ??= loadCountyMedicaidEnrollment(
+      this.abortController.signal,
+    );
+    return this.medicaidEnrollmentPromise;
   }
 
   private selectCounty(county: CountyFeature) {
