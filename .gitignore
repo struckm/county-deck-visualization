@@ -1,5 +1,6 @@
 node_modules/
 dist/
+src/wasm/*.wasm.map
 .wrangler/
 *.tsbuildinfo
 .DS_Store

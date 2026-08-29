@@ -1,0 +1,19 @@
+{
+  "targets": {
+    "release": {
+      "outFile": "src/wasm/colorScale.wasm",
+      "optimizeLevel": 3,
+      "shrinkLevel": 1,
+      "converge": true,
+      "noAssert": true
+    },
+    "debug": {
+      "outFile": "src/wasm/colorScale.wasm",
+      "debug": true,
+      "sourceMap": true
+    }
+  },
+  "entries": [
+    "assembly/colorScale.ts"
+  ]
+}

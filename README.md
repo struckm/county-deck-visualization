@@ -8,6 +8,12 @@ race/ethnicity views.
 The application uses direct DOM updates and persistent `Deck` instances; it has
 no UI framework or component runtime.
 
+The numeric quantile and logarithmic color-scale calculations run in a small
+WebAssembly module written in AssemblyScript. Browser and Deck.gl integration
+remain in TypeScript, where the required DOM and WebGL APIs are native. The
+Wasm binary is rebuilt automatically before development, tests, and production
+builds; it can also be generated directly with `npm run build:wasm`.
+
 Every metric and categorical overlay has a shareable deep link using the
 `metric` query parameter. For example, selecting the H-1B layer updates the URL
 to `?metric=<metric-id>`. Loading that URL restores the selection, and browser
@@ -31,6 +37,10 @@ Escape key, or a click outside the panel.
 npm install
 npm run dev
 ```
+
+The AssemblyScript source is in `assembly/colorScale.ts`. Vite loads the
+compiled `src/wasm/colorScale.wasm` once at startup, after which metric changes
+reuse the initialized instance.
 
 ## County metric contract
 

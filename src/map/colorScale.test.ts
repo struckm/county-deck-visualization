@@ -1,10 +1,28 @@
-import {describe, expect, it} from 'vitest';
+import {readFile} from 'node:fs/promises';
+import {beforeAll, describe, expect, it} from 'vitest';
 import {
   createLogScale,
   createQuantileScale,
   DEFAULT_PALETTE,
+  initializeColorScaleWasmFromBytes,
+  isColorScaleWasmInitialized,
   NO_DATA_COLOR,
 } from './colorScale';
+
+beforeAll(async () => {
+  const bytes = await readFile(
+    new URL('../wasm/colorScale.wasm', import.meta.url),
+  );
+  const binary = bytes.buffer.slice(
+    bytes.byteOffset,
+    bytes.byteOffset + bytes.byteLength,
+  ) as ArrayBuffer;
+  await initializeColorScaleWasmFromBytes(binary);
+});
+
+it('runs scale calculations through the WebAssembly module', () => {
+  expect(isColorScaleWasmInitialized()).toBe(true);
+});
 
 describe('createQuantileScale', () => {
   it('provides ten sequential shades', () => {
