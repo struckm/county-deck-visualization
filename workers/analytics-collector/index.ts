@@ -189,6 +189,20 @@ export function previousDateInTimeZone(
   return previous.toISOString().slice(0, 10);
 }
 
+export function isScheduledReportTime(
+  scheduledTime: number,
+  timeZone = REPORT_TIME_ZONE,
+): boolean {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hour: 'numeric',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(scheduledTime));
+  const values = Object.fromEntries(parts.map(({type, value}) => [type, value]));
+  return Number(values.hour) === 6 && Number(values.minute) === 0;
+}
+
 function parseRows(response: GaReportResponse): AnalyticsRow[] {
   const dimensions = response.dimensionHeaders?.map(({name}) => name ?? '') ?? [];
   const metrics = response.metricHeaders?.map(({name}) => name ?? '') ?? [];
@@ -297,7 +311,7 @@ export async function collectAndSend(
 
 export default {
   async scheduled(controller: ScheduledController, env: Env): Promise<void> {
+    if (!isScheduledReportTime(controller.scheduledTime)) return;
     await collectAndSend(env, controller.scheduledTime);
   },
 };
-

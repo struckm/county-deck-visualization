@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {previousDateInTimeZone} from './index';
+import {isScheduledReportTime, previousDateInTimeZone} from './index';
 
 describe('previousDateInTimeZone', () => {
   it('uses the previous Chicago calendar day during daylight time', () => {
@@ -21,3 +21,14 @@ describe('previousDateInTimeZone', () => {
   });
 });
 
+describe('isScheduledReportTime', () => {
+  it('runs at 06:00 Chicago time during daylight time', () => {
+    expect(isScheduledReportTime(Date.parse('2026-08-29T11:00:00Z'))).toBe(true);
+    expect(isScheduledReportTime(Date.parse('2026-08-29T12:00:00Z'))).toBe(false);
+  });
+
+  it('runs at 06:00 Chicago time during standard time', () => {
+    expect(isScheduledReportTime(Date.parse('2026-01-15T11:00:00Z'))).toBe(false);
+    expect(isScheduledReportTime(Date.parse('2026-01-15T12:00:00Z'))).toBe(true);
+  });
+});
