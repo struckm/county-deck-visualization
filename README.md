@@ -87,6 +87,16 @@ cartographic boundary file. It is rendered as a separate, thicker outline above
 the county polygons so state borders remain visually distinct from county
 borders at every zoom level.
 
+The browser loads both geometry collections from the generated
+`public/data/us-counties-states-2023.topojson`. It shares common boundary arcs
+and quantizes coordinates to a one-million-step grid, substantially reducing
+the initial transfer while retaining suitable precision at the map's maximum
+zoom. Rebuild it after changing either source GeoJSON file with:
+
+```bash
+npm run build:data:geometry
+```
+
 `public/data/county-population-2024.json` contains 3,144 county and
 county-equivalent estimates from the Census Population Estimates Program. All
 3,144 records join to the boundary file. The source does not provide matching

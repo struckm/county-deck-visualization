@@ -1,4 +1,4 @@
-import {loadCounties, loadStates} from './data/loadCounties';
+import {loadMapGeometry} from './data/loadCounties';
 import {loadCountyMetric} from './data/loadMetric';
 import {loadCountyDemographics} from './data/loadDemographics';
 import {createCrimeMetric, loadCountyCrime} from './data/loadCrime';
@@ -169,12 +169,12 @@ export class CountyMapApp {
   async start() {
     try {
       const requestedMetricId = readMetricId(window.location.href);
-      const [counties, states, initialSelection] = await Promise.all([
-        loadCounties(this.abortController.signal),
-        loadStates(this.abortController.signal),
+      const [mapGeometry, initialSelection] = await Promise.all([
+        loadMapGeometry(this.abortController.signal),
         this.loadInitialSelection(requestedMetricId),
       ]);
       if (this.abortController.signal.aborted) return;
+      const {counties, states} = mapGeometry;
       this.metrics = [initialSelection.metric];
       this.categoryOverlays = initialSelection.overlay
         ? [initialSelection.overlay]

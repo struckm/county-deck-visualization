@@ -14,6 +14,7 @@
     "deploy:analytics:report": "wrangler deploy -c wrangler.analytics-report.jsonc",
     "deploy:analytics:collector": "wrangler deploy -c wrangler.analytics-collector.jsonc",
     "deploy:analytics": "npm run deploy:analytics:email && npm run deploy:analytics:report && npm run deploy:analytics:collector",
+    "build:data:geometry": "node scripts/build-map-topology.mjs",
     "build:data:medicaid-enrollment": "node scripts/build-county-medicaid-enrollment.mjs public/data/us-counties-2023.geojson public/data/county-medicaid-enrollment-2024.json public/data/county-medicaid-enrollment-2024.csv 2024",
     "pretest": "npm run build:wasm",
     "test": "vitest run",
@@ -22,11 +23,15 @@
   "dependencies": {
     "@deck.gl/core": "^9.1.14",
     "@deck.gl/layers": "^9.1.14",
-    "@types/geojson": "^7946.0.16"
+    "@types/geojson": "^7946.0.16",
+    "topojson-client": "^3.1.0"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.54.1",
+    "@types/topojson-client": "^3.1.5",
+    "@types/topojson-server": "^3.0.4",
     "assemblyscript": "^0.28.20",
+    "topojson-server": "^3.0.1",
     "typescript": "~5.9.2",
     "vite": "^7.1.3",
     "vitest": "^3.2.4",
