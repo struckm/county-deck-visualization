@@ -12,6 +12,7 @@ interface Env {
   GA_PROPERTY_ID: string;
   GA_CLIENT_EMAIL: string;
   GA_PRIVATE_KEY: string;
+  ON_DEMAND_TOKEN: string;
   REPORT_GENERATOR: ServiceBinding;
 }
 
@@ -281,9 +282,8 @@ async function runReport(
 
 export async function collectAndSend(
   env: Env,
-  scheduledTime = Date.now(),
-): Promise<void> {
-  const reportDate = previousDateInTimeZone(scheduledTime);
+  reportDate = previousDateInTimeZone(Date.now()),
+): Promise<string> {
   const accessToken = await getAccessToken(env);
   const sections: AnalyticsSection[] = [];
 
@@ -307,11 +307,92 @@ export async function collectAndSend(
   if (!response.ok) {
     throw new Error(`Report pipeline failed (${response.status}): ${await response.text()}`);
   }
+
+  return reportDate;
+}
+
+function isValidReportDate(value: unknown): value is string {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === value;
+}
+
+async function tokensMatch(provided: string, expected: string): Promise<boolean> {
+  if (!provided || !expected) return false;
+  const encoder = new TextEncoder();
+  const [providedHash, expectedHash] = await Promise.all([
+    crypto.subtle.digest('SHA-256', encoder.encode(provided)),
+    crypto.subtle.digest('SHA-256', encoder.encode(expected)),
+  ]);
+  const left = new Uint8Array(providedHash);
+  const right = new Uint8Array(expectedHash);
+  let difference = 0;
+  for (let index = 0; index < left.length; index += 1) {
+    difference |= left[index] ^ right[index];
+  }
+  return difference === 0;
+}
+
+type ReportRunner = (env: Env, reportDate?: string) => Promise<string>;
+
+export async function handleOnDemand(
+  request: Request,
+  env: Env,
+  runReport: ReportRunner = collectAndSend,
+): Promise<Response> {
+  const url = new URL(request.url);
+  if (url.pathname !== '/generate') return new Response('Not found', {status: 404});
+  if (request.method !== 'POST') {
+    return new Response('Method not allowed', {
+      status: 405,
+      headers: {allow: 'POST'},
+    });
+  }
+
+  const authorization = request.headers.get('authorization') ?? '';
+  const providedToken = authorization.startsWith('Bearer ')
+    ? authorization.slice('Bearer '.length)
+    : '';
+  if (!(await tokensMatch(providedToken, env.ON_DEMAND_TOKEN))) {
+    return Response.json({error: 'Unauthorized'}, {status: 401});
+  }
+
+  const rawBody = await request.text();
+  const body = rawBody.trim() === ''
+    ? {}
+    : (() => {
+        try {
+          return JSON.parse(rawBody) as {reportDate?: unknown};
+        } catch {
+          return null;
+        }
+      })();
+  if (!body || (body.reportDate !== undefined && !isValidReportDate(body.reportDate))) {
+    return Response.json(
+      {error: 'Body must be JSON with an optional reportDate in YYYY-MM-DD format.'},
+      {status: 400},
+    );
+  }
+
+  try {
+    const reportDate = await runReport(
+      env,
+      body.reportDate === undefined ? undefined : body.reportDate,
+    );
+    return Response.json({sent: true, reportDate});
+  } catch (error) {
+    console.error('On-demand analytics report failed', error);
+    return Response.json({error: 'Analytics report generation failed.'}, {status: 502});
+  }
 }
 
 export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    return handleOnDemand(request, env);
+  },
+
   async scheduled(controller: ScheduledController, env: Env): Promise<void> {
     if (!isScheduledReportTime(controller.scheduledTime)) return;
-    await collectAndSend(env, controller.scheduledTime);
+    await collectAndSend(env, previousDateInTimeZone(controller.scheduledTime));
   },
 };

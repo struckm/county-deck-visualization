@@ -250,8 +250,8 @@ the map should not contain source-specific joins or aggregation logic.
 
 The GA4 email report is implemented as three private Cloudflare Workers:
 
-1. `county-analytics-collector` runs daily at `13:00 UTC`, queries the previous
-   `America/Chicago` calendar day from GA4, and calls the report generator.
+1. `county-analytics-collector` runs daily at `06:00 America/Chicago`, queries
+   the previous local calendar day from GA4, and calls the report generator.
 2. `county-analytics-report-generator` formats the analytics sections as HTML
    and plain text, then calls the email sender.
 3. `county-analytics-email-sender` sends the report from
@@ -259,7 +259,8 @@ The GA4 email report is implemented as three private Cloudflare Workers:
    Resend's API.
 
 The two downstream Workers have no public URL. They are reachable only through
-Cloudflare service bindings. Deploy them in dependency order with:
+Cloudflare service bindings. The collector exposes a token-protected on-demand
+endpoint at `POST /generate`. Deploy them in dependency order with:
 
 ```sh
 npm run deploy:analytics
@@ -271,6 +272,22 @@ Before deployment:
 - Create a service account, give its email Viewer access to GA4 property
   `327638989`, and add `GA_CLIENT_EMAIL` and `GA_PRIVATE_KEY` as secrets on the
   collector Worker.
+- Add a strong random `ON_DEMAND_TOKEN` secret to the collector Worker. Generate
+  and email yesterday's report with:
+
+  ```sh
+  curl -X POST https://county-analytics-collector.<account-subdomain>.workers.dev/generate \
+    -H "Authorization: Bearer $ON_DEMAND_TOKEN"
+  ```
+
+  To generate a particular date, add a JSON body:
+
+  ```sh
+  curl -X POST https://county-analytics-collector.<account-subdomain>.workers.dev/generate \
+    -H "Authorization: Bearer $ON_DEMAND_TOKEN" \
+    -H "Content-Type: application/json" \
+    --data '{"reportDate":"2026-08-26"}'
+  ```
 - Register the GA4 event-scoped custom dimensions used in the report:
   `county_name`, `state_code`, `county_geoid`, `metric_id`, `metric_label`, and
   `contact_method`.

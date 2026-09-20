@@ -35,6 +35,7 @@ export class CountyDetailOverlay {
   readonly element: HTMLDivElement;
   private readonly mapElement: HTMLDivElement;
   private readonly closeButton: HTMLButtonElement;
+  private readonly briefButton: HTMLButtonElement;
   private readonly title: HTMLHeadingElement;
   private readonly metricLabel: HTMLElement;
   private readonly metricValue: HTMLElement;
@@ -88,9 +89,12 @@ export class CountyDetailOverlay {
             <span class="eyebrow">County detail</span>
             <h2 id="county-detail-title"></h2>
           </div>
-          <button class="county-detail__close" type="button" aria-label="Close county detail" tabindex="-1">
-            <span aria-hidden="true">×</span>
-          </button>
+          <div class="county-detail__actions">
+            <button class="county-detail__brief" type="button">Download brief</button>
+            <button class="county-detail__close" type="button" aria-label="Close county detail" tabindex="-1">
+              <span aria-hidden="true">×</span>
+            </button>
+          </div>
         </header>
         <div class="county-detail__map county-detail__map--demographics-open">
           <button class="county-detail__demographics-toggle" type="button" aria-expanded="true">
@@ -122,6 +126,11 @@ export class CountyDetailOverlay {
     this.closeButton = query(
       this.element,
       '.county-detail__close',
+      HTMLButtonElement,
+    );
+    this.briefButton = query(
+      this.element,
+      '.county-detail__brief',
       HTMLButtonElement,
     );
     this.title = query(this.element, '#county-detail-title', HTMLHeadingElement);
@@ -178,6 +187,7 @@ export class CountyDetailOverlay {
     this.updateText();
 
     this.closeButton.addEventListener('click', onRequestClose);
+    this.briefButton.addEventListener('click', () => this.downloadBrief());
     this.demographicsToggle.addEventListener('click', () =>
       this.setDemographicsOpen(true),
     );
@@ -321,6 +331,32 @@ export class CountyDetailOverlay {
     this.geoid.textContent = properties.GEOID;
     this.state.textContent = properties.STATE_NAME;
     this.renderProfile();
+  }
+
+  private downloadBrief() {
+    const properties = this.county.properties;
+    const countyName = `${properties.NAMELSAD}, ${properties.STUSPS}`;
+    const sourceLabel = this.demographicsSource.textContent ?? 'Source';
+    const sourceUrl = this.demographicsSource.href;
+    const report = buildCountyBriefHtml({
+      countyName,
+      metricLabel: this.metricLabel.textContent ?? this.metric.label,
+      metricValue: this.metricValue.textContent ?? 'No data',
+      waterArea: this.waterArea.textContent ?? 'No data',
+      geoid: properties.GEOID,
+      state: properties.STATE_NAME,
+      profileTitle: this.demographicsTitle.textContent ?? 'County profile',
+      profileHtml: this.demographicsContent.innerHTML,
+      sourceLabel,
+      sourceUrl,
+    });
+    const blob = new Blob([report], {type: 'text/html;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `county-signal-${properties.GEOID}.html`;
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   private setDemographicsOpen(isOpen: boolean) {
@@ -611,6 +647,80 @@ export class CountyDetailOverlay {
       this.metric.id.startsWith(`${this.medicaidEnrollment.id}-`)
     );
   }
+}
+
+type CountyBrief = {
+  countyName: string;
+  metricLabel: string;
+  metricValue: string;
+  waterArea: string;
+  geoid: string;
+  state: string;
+  profileTitle: string;
+  profileHtml: string;
+  sourceLabel: string;
+  sourceUrl: string;
+};
+
+export function buildCountyBriefHtml(brief: CountyBrief) {
+  const generated = new Intl.DateTimeFormat('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  }).format(new Date());
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>County Signal — ${escapeHtml(brief.countyName)}</title>
+  <style>
+    :root{font-family:Inter,ui-sans-serif,system-ui,sans-serif;color:#142326;background:#f4f7f7}
+    body{max-width:880px;margin:0 auto;padding:48px 28px 72px}
+    header{padding-bottom:24px;border-bottom:3px solid #efb74a}
+    .brand{color:#26758d;font-size:12px;font-weight:800;letter-spacing:.14em;text-transform:uppercase}
+    h1{margin:8px 0 4px;font-size:34px} .meta{margin:0;color:#637579}
+    .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:26px 0}
+    .stat{padding:16px;border:1px solid #d8e1e2;border-radius:8px;background:white}
+    .stat span{display:block;color:#6b7d80;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+    .stat strong{display:block;margin-top:6px;font-size:16px}
+    main{padding:24px;border:1px solid #d8e1e2;border-radius:10px;background:white}
+    h2{margin-top:0}.county-detail__crime-summary{display:grid;gap:8px;padding:0}
+    .county-detail__crime-summary>div,.demographic-row>div:first-child{display:flex;justify-content:space-between;gap:16px}
+    dl,dd{margin:0}.demographic-row{margin:14px 0}.demographic-row__track{height:5px;background:#e7eded;border-radius:4px}
+    .demographic-row__track span{display:block;height:100%;background:#26758d;border-radius:4px}
+    .county-detail__profile-caveat{padding-top:18px;border-top:1px solid #d8e1e2;color:#65787b;font-size:12px;line-height:1.5}
+    footer{margin-top:22px;color:#65787b;font-size:12px}a{color:#26758d}
+    @media print{body{padding:0;background:white}.stat,main{break-inside:avoid}}
+    @media(max-width:650px){.stats{grid-template-columns:repeat(2,1fr)}body{padding:24px 14px}}
+  </style>
+</head>
+<body>
+  <header><div class="brand">County Signal / Decision brief</div><h1>${escapeHtml(brief.countyName)}</h1><p class="meta">Generated ${escapeHtml(generated)}</p></header>
+  <section class="stats">
+    ${briefStat(brief.metricLabel, brief.metricValue)}
+    ${briefStat('Water area', brief.waterArea)}
+    ${briefStat('FIPS / GEOID', brief.geoid)}
+    ${briefStat('State', brief.state)}
+  </section>
+  <main><h2>${escapeHtml(brief.profileTitle)}</h2>${brief.profileHtml}</main>
+  <footer>Source: <a href="${escapeHtml(brief.sourceUrl)}">${escapeHtml(brief.sourceLabel)}</a>. This report is an analytical aid; verify material decisions against the cited primary source.</footer>
+</body>
+</html>`;
+}
+
+function briefStat(label: string, value: string) {
+  return `<div class="stat"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
+}
+
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;',
+  })[character] ?? character);
 }
 
 function createH1bSummary(h1b: CountyH1b) {
