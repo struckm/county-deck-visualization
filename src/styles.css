@@ -26,14 +26,24 @@ button, select { font: inherit; }
   z-index: 100;
   display: grid;
   place-items: center;
+  align-content: center;
+  gap: 20px;
   background: #0b171a;
   pointer-events: none;
-  animation: intro-fade 700ms ease 2s forwards;
+  animation: intro-fade 700ms ease 3s forwards;
+}
+
+.intro-title {
+  color: #e9f0f1;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(2.5rem, 6vw, 4.5rem);
+  letter-spacing: 0.08em;
+  line-height: 1.1;
 }
 
 .intro-overlay img {
   width: min(85vw, 620px);
-  max-height: 90vh;
+  max-height: calc(90vh - 110px);
   object-fit: contain;
   filter: brightness(1.8);
 }
