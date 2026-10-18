@@ -20,6 +20,28 @@ body {
 
 button, select { font: inherit; }
 
+.intro-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  background: #0b171a;
+  pointer-events: none;
+  animation: intro-fade 700ms ease 2s forwards;
+}
+
+.intro-overlay img {
+  width: min(85vw, 620px);
+  max-height: 90vh;
+  object-fit: contain;
+  filter: brightness(1.8);
+}
+
+@keyframes intro-fade {
+  to { opacity: 0; visibility: hidden; }
+}
+
 .app-shell {
   width: min(1480px, 100%);
   min-height: 100vh;
@@ -625,6 +647,7 @@ h2 { margin: 4px 0 0; font-size: clamp(1.2rem, 2.4vw, 1.8rem); line-height: 1.1;
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .intro-overlay { display: none; }
   .spinner { animation: none; }
   .county-detail-scrim,
   .county-detail-scrim::before,
