@@ -14,7 +14,8 @@
   "services": [
     {
       "binding": "REPORT_GENERATOR",
-      "service": "county-analytics-report-generator"
+      "service": "county-analytics-report-generator",
+      "environment": "production"
     }
   ],
   "triggers": {

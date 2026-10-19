@@ -51,6 +51,11 @@ export default {
       });
     }
 
-    return Response.json({sent: true});
+    const result = (await response.json()) as {id?: unknown};
+    if (typeof result.id !== 'string' || result.id.length === 0) {
+      return new Response('Resend accepted the request without a message ID.', {status: 502});
+    }
+
+    return Response.json({sent: true, resendId: result.id});
   },
 };

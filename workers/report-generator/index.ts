@@ -3,6 +3,7 @@ import type {
   AnalyticsSection,
   DailyAnalyticsData,
   EmailReport,
+  ReportDelivery,
 } from '../shared/types';
 
 interface ServiceBinding {
@@ -154,7 +155,12 @@ export default {
       return new Response(`Email sender failed: ${await response.text()}`, {status: 502});
     }
 
-    return Response.json({sent: true, reportDate: data.reportDate});
+    const delivery = (await response.json()) as {resendId?: unknown};
+    if (typeof delivery.resendId !== 'string' || delivery.resendId.length === 0) {
+      return new Response('Email sender did not return a delivery ID.', {status: 502});
+    }
+
+    const result: ReportDelivery = {reportDate: data.reportDate, resendId: delivery.resendId};
+    return Response.json({sent: true, ...result});
   },
 };
-

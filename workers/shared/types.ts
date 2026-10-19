@@ -22,3 +22,7 @@ export interface EmailReport {
   text: string;
 }
 
+export interface ReportDelivery {
+  reportDate: string;
+  resendId: string;
+}

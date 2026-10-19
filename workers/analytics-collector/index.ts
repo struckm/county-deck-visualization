@@ -2,6 +2,7 @@ import type {
   AnalyticsRow,
   AnalyticsSection,
   DailyAnalyticsData,
+  ReportDelivery,
 } from '../shared/types';
 
 interface ServiceBinding {
@@ -283,7 +284,7 @@ async function runReport(
 export async function collectAndSend(
   env: Env,
   reportDate = previousDateInTimeZone(Date.now()),
-): Promise<string> {
+): Promise<ReportDelivery> {
   const accessToken = await getAccessToken(env);
   const sections: AnalyticsSection[] = [];
 
@@ -308,7 +309,12 @@ export async function collectAndSend(
     throw new Error(`Report pipeline failed (${response.status}): ${await response.text()}`);
   }
 
-  return reportDate;
+  const delivery = (await response.json()) as {resendId?: unknown};
+  if (typeof delivery.resendId !== 'string' || delivery.resendId.length === 0) {
+    throw new Error('Report generator did not return a delivery ID.');
+  }
+
+  return {reportDate, resendId: delivery.resendId};
 }
 
 function isValidReportDate(value: unknown): value is string {
@@ -333,7 +339,7 @@ async function tokensMatch(provided: string, expected: string): Promise<boolean>
   return difference === 0;
 }
 
-type ReportRunner = (env: Env, reportDate?: string) => Promise<string>;
+type ReportRunner = (env: Env, reportDate?: string) => Promise<ReportDelivery>;
 
 export async function handleOnDemand(
   request: Request,
@@ -375,11 +381,11 @@ export async function handleOnDemand(
   }
 
   try {
-    const reportDate = await runReport(
+    const delivery = await runReport(
       env,
       body.reportDate === undefined ? undefined : body.reportDate,
     );
-    return Response.json({sent: true, reportDate});
+    return Response.json({sent: true, ...delivery});
   } catch (error) {
     console.error('On-demand analytics report failed', error);
     return Response.json({error: 'Analytics report generation failed.'}, {status: 502});

@@ -37,7 +37,7 @@ describe('buildDailyReport', () => {
 
 describe('report generator Worker', () => {
   it('passes the generated report to the email sender', async () => {
-    const fetch = vi.fn().mockResolvedValue(Response.json({sent: true}));
+    const fetch = vi.fn().mockResolvedValue(Response.json({sent: true, resendId: 'email_123'}));
     const response = await reportWorker.fetch(
       new Request('https://report-generator/generate', {
         method: 'POST',
@@ -47,9 +47,13 @@ describe('report generator Worker', () => {
     );
 
     expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      sent: true,
+      reportDate: '2026-08-26',
+      resendId: 'email_123',
+    });
     expect(fetch).toHaveBeenCalledOnce();
     const request = fetch.mock.calls[0][1] as RequestInit;
     expect(String(request.body)).toContain('County Atlas analytics');
   });
 });
-

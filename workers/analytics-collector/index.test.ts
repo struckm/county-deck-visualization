@@ -59,7 +59,7 @@ describe('on-demand report endpoint', () => {
   });
 
   it('generates yesterday by default', async () => {
-    const runReport = vi.fn().mockResolvedValue('2026-08-31');
+    const runReport = vi.fn().mockResolvedValue({reportDate: '2026-08-31', resendId: 'email_123'});
     const response = await handleOnDemand(
       new Request('https://collector.example/generate', {
         method: 'POST',
@@ -71,11 +71,15 @@ describe('on-demand report endpoint', () => {
 
     expect(response.status).toBe(200);
     expect(runReport).toHaveBeenCalledWith(env, undefined);
-    await expect(response.json()).resolves.toEqual({sent: true, reportDate: '2026-08-31'});
+    await expect(response.json()).resolves.toEqual({
+      sent: true,
+      reportDate: '2026-08-31',
+      resendId: 'email_123',
+    });
   });
 
   it('accepts a specific report date', async () => {
-    const runReport = vi.fn().mockResolvedValue('2026-08-20');
+    const runReport = vi.fn().mockResolvedValue({reportDate: '2026-08-20', resendId: 'email_123'});
     const response = await handleOnDemand(
       new Request('https://collector.example/generate', {
         method: 'POST',
