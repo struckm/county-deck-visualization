@@ -43,13 +43,13 @@ describe('Google Analytics events', () => {
       gtag,
       location: {href: 'https://www.markstruck.com/?metric=population-2024'},
     });
-    vi.stubGlobal('document', {title: 'U.S. County Atlas'});
+    vi.stubGlobal('document', {title: 'Atlellan'});
 
     trackGoogleAnalyticsPageView();
 
     expect(gtag).toHaveBeenCalledWith('event', 'page_view', {
       page_location: 'https://www.markstruck.com/?metric=population-2024',
-      page_title: 'U.S. County Atlas',
+      page_title: 'Atlellan',
     });
   });
 });
